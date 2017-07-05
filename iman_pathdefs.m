@@ -9,17 +9,17 @@
 function p = iman_pathdefs()
 %Declare proper path for image processing code
 % p.code = '';  %Default sets no new path
-p.code = 'C:\Users\mspargett\Local Code\Image Analysis';
+p.code = 'L:\albeck\Code\Image Analysis';
         
 %Declare proper path for Bio-Formats package
 % p.bioformats = '';    %Default sets no new path, but must be set unless
 %                       bioformats.jar is in the Working Directory when
 %                       processing is run
-p.bioformats = 'C:\Users\mspargett\Local Code\bfmatlab\';
+p.bioformats = 'L:\albeck\bfmatlab\';
 
 %Declare proper path for uTrack
 % p.utrack = '';    %Default sets no new path
-p.utrack = 'C:\Users\mspargett\Local Code\u-track_2.1.0\software';
+p.utrack = 'L:\albeck\u-track_2.1.0\software';
         
 %Declare common problematic paths
 %   If desired can list undesirable paths (warning will show when they are
