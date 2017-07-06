@@ -156,7 +156,6 @@ targetim = [];
 switch exflag
     case 2  %Input is a file
         imt = dao.info.ftype;  targetim = fdef.nam;
-        %FIXME check on if multipage image
         
     case 7  %Input is a folder
         %Get only valid image types
@@ -195,20 +194,21 @@ if ~isempty(fid);   fend = fbeg{2};
     %Parse id segment into spacers, ids, and values
     fid = regexp(fid{1}, ...
         '(?<spc>[-_\s]?)(?<id>(t|xy|z|c))(?<val>\d+)', 'names');
-else   fend = [];
+    nid = numel(fid);   %Number of IDs
+else   fend = [];  nid = 0;
 end;   fbeg = fbeg{1};
 
  
 
 %Construct ID matching specification, based on naming pattern
 idmatch = [];   fnum = struct();
-for s = 1:numel(fid)
+for s = 1:nid
     idmatch = [idmatch, fid(s).spc, fid(s).id,'(?<',fid(s).id,'>\d+)']; %#ok<AGROW>
 end
 
 %Parse valid indices for valid files
 fstr = cell2mat(regexp(fns, ['^',fbeg,idmatch,fend], 'names')); clear fns;
-for s = 1:numel(fid)
+for s = 1:nid
     fnum.(fid(s).id) = str2double({fstr.(fid(s).id)})';
 end
 %Get field widths for each index              %(below)Fixes size of empties
@@ -230,7 +230,7 @@ fdims = cell2mat(struct2cell(dao.info.imax));   %Get number of files
 nfd = numel(fdims);  imfi = cell([fdims(:);1]');  %Allocate imfi
 for s = 1:prod(fdims);
     [oi{1:nfd}] = ind2sub(fdims,s);  oi = [oi{:}]; %Get indices
-    if isempty(oi); oi = []; end  %Fixes size of empties
+    if isempty(oi) || isempty(fdims); oi = []; end  %Fixes size of empties
     imfi{s} = imfinfo(dao.read(oi));  clear oi;
 end
 
