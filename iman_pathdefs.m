@@ -9,7 +9,8 @@
 function p = iman_pathdefs()
 %Declare proper path for image processing code
 % p.code = '';  %Default sets no new path
-p.code = 'L:\albeck\Code\Image Analysis';
+p.code = ['L:\albeck\Code\Image Analysis;',...
+    'L:\albeck\Code\Image Analysis\Test Scripts'];
         
 %Declare proper path for Bio-Formats package
 % p.bioformats = '';    %Default sets no new path, but must be set unless
