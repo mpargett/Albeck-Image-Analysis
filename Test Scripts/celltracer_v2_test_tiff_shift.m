@@ -92,7 +92,7 @@ ip.xyshift.shifttype = 'translation';  %Type of shift to perform
 %Procedure scope - target ranges of the data to process
 op.cind     = 1:ip.indsz.c;    %Indices of Channels to process (names or indices)
 op.xypos    = 1;     %Indices of XY positions to process
-op.trng     = [1];       %Start and End indices of Time to process
+op.trng     = [1,ip.indsz.t];       %Start and End indices of Time to process
 op.nW       = 10;        %Number of parallel workers to use
 op.objbias  = true;     %Correct for objective view bias
 op.unmix    = false;  	%Linearly unmix color channel cross-talk
