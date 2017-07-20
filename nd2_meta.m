@@ -253,8 +253,11 @@ mtcht = regexp(tun, ...
 mtch = [mtch{:}]; %Removes any empty results (from a unitless value)
 
 %Modify value to match target units, as needed
-if ~isempty(mtch(1).unit) && ~isempty(mtch(1).factor) %Uses first good unit
-    val = val.*10^(3*( pfix.(mtch(1).factor) - pfix.(mtcht.factor) ));
+%   Find first entry with a good unit definition (first good unit)
+fgu = find( arrayfun(@(x) isfield(x,'unit') && ~isempty(x.unit) ...
+                          && ~isempty(x.factor), mtch), 1, 'first');
+if ~isempty(fgu) %Uses first good unit
+    val = val.*10^(3*( pfix.(mtch(fgu).factor) - pfix.(mtcht.factor) ));
 end
 
 end
