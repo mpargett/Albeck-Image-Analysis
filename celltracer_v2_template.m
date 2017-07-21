@@ -123,8 +123,10 @@ op.seg.minD = 12;       %Minimum nuclear diameter (pixels)
 op.seg.minF = 0.8;      %Minimum 'form factor' (circularity)
 %       It is recommended to scale imaging for nuclei (segmentation
 %       targets) to be greater than 10 pixels in diameter.
-op.seg.snr  = 2;        %Minimum signal to noise ratio expected
-                        %   (minimum foreground intensity / background)
+op.seg.sigthresh = []; %[Optional] Minimum intensity of 'good' signal
+%   If you use sigthresh, pre-subtract any camera baseline
+op.seg.hardsnr = true;  %Typically kept to FALSE.  TRUE makes the signal 
+%   threshold 'hard', enforcing cutoff of any pixels below it.
 
 %    Masking settings
 op.msk.rt = {};             %Pre-averaging channel ratios to take {{'',''}}

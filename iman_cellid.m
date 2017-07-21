@@ -14,9 +14,18 @@ if strcmpi(im,'version'); movieInfo = 'v2.0'; return; end
 %% Operation parameters
 nth = 20;               %Number of Thresholds for binary operations
 erode_grad = floor(op.seg.minD./4); %Erosion depth for gradients (cyto segment)
-bkg_rat = 1.5;          %Min foreground to background ratio (~SNR)
-if isfield(op.seg, 'snr') && ~isempty(op.seg.snr)
-    bkg_rat = min(bkg_rat, 1 + 0.5*(op.seg.snr-1)); 
+bkg_rat = 0.5;          %Min foreground to background ratio (~SNR-1)
+%   Get flag for hard (or soft) SNR thresholding
+if isfield(op.seg, 'hardsnr') && ~isempty(op.seg.hardsnr); hsnr = true;
+else hsnr = false;  end
+
+%   Get image background intensity
+if ~isempty(bkg); stim_bkg = bkg(op.seg.chan); else stim_bkg = 0; end
+%   Get background ratio for a threshold on fore- vs. back-ground
+if isfield(op.seg, 'sigthresh') && ~isempty(op.seg.sigthresh)
+    %   Use a conservative estimate of 1/2 the SNR as threshold
+    %   unless directed to use hard SNR threshold (op.seg.hardsnr)
+    bkg_rat = max(0, (op.seg.sigthresh./stim_bkg - 1)*(1+hsnr)/2 );
 end
 
 %% Preliminary calculations
@@ -31,9 +40,7 @@ gaussianFilter = fspecial('gaussian', flts.*[1, 1], flts/2);
 %   All further operations consider this segmentation target image (stim)
 stim = double( imfilter(im(:,:,op.seg.chan), gaussianFilter, 'replicate') );
 %Set 'foreground' region based on background levels (previously removed)
-if ~isempty(bkg); stim_bkg = bkg(op.seg.chan); else stim_bkg = 0; end
-stim_fore = stim > stim_bkg.*(bkg_rat-1);   %Foreground area mask
-
+stim_fore = stim > stim_bkg.*(bkg_rat);   %Foreground area mask
 %Define binary structuring elements
 st1 = strel('disk', ceil(flts/4));  st2 = strel('disk', 2*ceil(flts/4));
 
@@ -89,7 +96,7 @@ end
 %Erode further if a cytoplasmic segmentation
 %   Gradients in cyto view tend to overestimate the nucleus
 %   Erode depth scaled by minimum nuc diameter (prevent overerosion)
-if op.seg.cyt == false;  
+if op.seg.cyt  
     enuc = imerode(enuc, strel( 'disk', erode_grad ));    
 end
 
