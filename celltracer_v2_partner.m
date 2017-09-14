@@ -100,7 +100,9 @@ assert(all(bkc), 'IMAN:bkgCheck', sprintf(['Validation failed. ',...
 
 % --- Backup MetaData review ---
 %   Ensure filled sample time in MetaData
-if isfield(ip,'tsamp'); ip.bkmd.cam.tsamp = ip.tsamp;
+if isfield(ip,'tsamp'); 
+    ip.bkmd.cam.tsamp = ip.tsamp; % keep for historical reasons
+       op.trk.linkwin = ceil(op.trk.linkwin/ip.tsamp); % change from minutes to frames
 elseif ~isfield(ip.bkmd.cam,'tsamp') || isempty(ip.bkmd.cam.tsamp)
     error('IMAN:tsamp', ['Either ip.tsamp or ip.bkmd.cam.tsamp must ',...
         'be defined as a scalar value.']);

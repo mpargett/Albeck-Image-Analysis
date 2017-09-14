@@ -20,18 +20,26 @@
 %   Modified by MPargett, 5.8.15 
 %
 
-function tracksFinal = iman_utrack_call(movieInfo, p)
+function tracksFinal = iman_utrack_call(movieInfo, p, op)
 %Version check provision
 if strcmpi(movieInfo,'version'); tracksFinal = 'v1.0'; return; end
+%   Assign provided parameters
+pdef.mergeSplit = 3;
+params = fieldnames(pdef);
+for s = 1:numel(params)
+   if ~isfield(op.trk, params{s})
+       op.trk.(params{s}) = pdef.(params{s});
+   end
+end
 
 %INFORMATION NEEDED:
 %   Time Step
 %   Image Size / Pixel size
 
 %Global Parameters to employ throughout this procedure
-tWin = ceil(15*5/p.tsamp);    %Time window of interest about a frame
+tWin = op.trk.linkwin;    %Time window of interest about a frame
                               % Scaled on typical sampling time of 5 min
-iRad = 25/sqrt(p.PixSizeX.^2 + p.PixSizeY.^2);   %Radius of interest
+iRad = op.trk.movrad/sqrt(p.PixSizeX.^2 + p.PixSizeY.^2);   %Radius of interest
 %   About a particle (cell centroid), scaled for 25 um
 
 
@@ -42,7 +50,7 @@ gapCloseParam.timeWindow = tWin;
 %   This parameter is used for all time-based constraints
 
 %Merging/Splitting Flag
-gapCloseParam.mergeSplit = 1;
+gapCloseParam.mergeSplit = op.trk.mergeSplit;
 %1 if merging and splitting are to be considered, 2 if only merging is to
 %   be considered, 3 if only splitting is to be considered, 0 if no merging
 %   or splitting are to be considered.  

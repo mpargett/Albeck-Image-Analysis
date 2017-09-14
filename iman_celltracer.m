@@ -403,7 +403,7 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
                 movieInfo(s), 'UniformOutput', false);
         end
         %Call uTrack (uses trackCloseGapsKalmanSparse)
-        tracksFinal = iman_utrack_call(movieInfo, GMD.cam);
+        tracksFinal = iman_utrack_call(movieInfo, GMD.cam, op);
         
         %Perform track cleanup to deliver xC and yC matrices
         %   Provides sliced matrices for contouring (ensuring integers)
