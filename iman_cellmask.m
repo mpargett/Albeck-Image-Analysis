@@ -3,14 +3,44 @@
 %   and mean Cell Trace values over masked images.  Use this function after
 %   a cell track has been established (e.g. via u-Track).
 %
-%FIXME make a real header
+%   [valcube, mask] = iman_cellmask(imin, m, op, nmasks)
+%       returns valcube (nCells x nTime x nChannels matrix of values) and
+%   mask (a structure with the binary masks used - packed via bwpack).  The
+%   procedure must be provided the input image (imin), a coordinate
+%   structure (m - same as uTrack's movieInfo), operation parameters (op)
+%   and nuclear masks from which to start (nmasks, as a logical matrix).
+%
+%   If called without the coordinate info (m), iman_cellmask will return
+%   the naming structure (as a cell array) of the valcubes that it will
+%   generate given the corresponding image size and operation parameters.
+%
+%   The operation parameters structure, op, may contain fields:
+%       cname       -List of channel names (cell array)
+%       cind        -List of channel indices used
+%       unmix       -Logical, TRUE is using spectral unmixing
+%       seg.maxD    -Maximum nucleus diameter allowed from Segmentation
+%       msk.rt      -Indices of channel to divide prior to averaging,
+%                       as 1 x nRatios cell array with 2 indices per ratio
+%       msk.fret    -Definition of any FRET channels for spectral unmixing,
+%                       as a structure, with fieldnames declaring new FRET
+%                       channels, and values being cell array with the
+%                       channel names of the donor and emitter
+%       msk.aggfun  -Definition of additional aggregate functions to use,
+%                       as a structure with fields:
+%               name    -Name of new function (prepends channel names)
+%               chan    -Channel indices on which to use
+%               loc     -Localization(s) on which to use (1: Nuc, 2:Cyt)
+%               fun     -Function handle to be applied
+%
+
 %FIXME scale EfA averaging with FRET concentration
 
 %Updated 2.26.17 to improve indexing into image via masks for speed.
+%Updated 9.15.17 to include alternate aggregation functions. MP
 
 function [valcube, mask] = iman_cellmask(imin, m, op, nmasks)
 %Version check provision
-if strcmpi(imin,'version'); valcube = 'v2.1'; return; end
+if strcmpi(imin,'version'); valcube = 'v2.2'; return; end
 
 %% Operation parameters
 ncgap  = floor((0.05*op.seg.maxD)) + 2;  %Size of gap between nuc mask and cyto
@@ -24,7 +54,12 @@ if numel(sz) > 2; nchan = sz(3);  sz = sz(1:2); else nchan = 1; end
 
 %Check number of cross-channel ratios requested
 nrt = numel(op.msk.rt);
-
+%Check for additional aggregation functions
+if isfield(op.msk,'aggfun')
+    nagg = numel(op.msk.aggfun); 
+    nagt = sum(arrayfun(@(x)numel(x.chan)*numel(x.loc), op.msk.aggfun));
+else nagg = 0; nagt = 0;
+end
 
 %% IF coordinate/track information not provided, return valcube order
 %   In this case, imin may contain only the size of the image data
@@ -38,8 +73,8 @@ if isempty(m)
             'UniformOutput', false);
     else    cns = op.cname(op.cind);
     end
-    %Filling order is Nucs,Cytos,Ratios,Coords,Median
-    lcn = {'_Nuc','_Cyto'};
+    %Filling order is Nucs,Cyts,Ratios,Coords,NuclearArea
+    lcn = {'_Nuc','_Cyt'};
     valcube(1:nchan) = cellfun(@(x)[x,lcn{1}], cns, ...
         'UniformOutput', false);
     valcube(nchan+(1:nchan)) = cellfun(@(x)[x,lcn{2}], cns, ...
@@ -49,6 +84,23 @@ if isempty(m)
             cns{op.msk.rt{sr}(2)},lcn{1}];
         valcube{2*nchan + 2*sr} = [cns{op.msk.rt{sr}(1)},lcn{2},'/',...
             cns{op.msk.rt{sr}(2)},lcn{2}];
+    end
+    %Custom aggregations (if requested)
+    if nagg > 0
+        ca = cell(numel(op.msk.aggfun),1);
+        for s = 1:numel(op.msk.aggfun)
+            %   Get numbers of channel and localizations involved
+            nc = numel(op.msk.aggfun(s).chan);   %1 - nchan
+            nl = numel(op.msk.aggfun(s).loc);    %1 - 2
+            %   Expand name components and align to form combinations
+            ca{s} = [repmat({[op.msk.aggfun.name,'_']}, nc*nl, 1), ...
+                reshape(repmat(reshape(op.cname(op.msk.aggfun.chan),1,nc),...
+                nl,1),nc*nl,1), repmat(lcn(op.msk.aggfun.loc)', nc, 1)];
+            %   Pack into final names
+            ca{s} = cellfun(@(x)[x{:}], num2cell(ca{s}, 2), 'Un', 0);
+        end
+        %   Append to output (vcorder, called valcube here)
+        valcube = cat(1, valcube, ca{:});
     end
     %Standard appendices -      coordinates    nuc area
     valcube(end + (1:3)) = {'XCoord', 'YCoord', 'nArea'};
@@ -104,7 +156,7 @@ mask.nuc = logical(nuclm);  mask.cyt = logical(cytlm);
 
 %% Calculate and fill outputs (the 'valcube' matrix)
 %Generate pre-average cross-channel ratio images (background subtracted)
-rim = cell(nrt,1);  nvc = nchan*2;
+rim = cell(nrt,1);
 for sr = 1:nrt
     %Calculate pre-average ratio image
     rim{sr} = imin{op.msk.rt{sr}(1)}./imin{op.msk.rt{sr}(2)};
@@ -112,17 +164,14 @@ for sr = 1:nrt
     rim{sr}( imin{op.msk.rt{sr}(1)} < 0 | imin{op.msk.rt{sr}(2)} <= 0 ) = NaN;
 end
 
-%Store values (individual and ratios)
-%   Initialize valcube
-valcube = nan(nnuc, 1, nvc+2*nrt+3);
-
+%Prepare label/mask indices to store channel values
 %Labels and images are expanded to vectors by masking of all elements
 %   (i.e. nuclei of cytoplasms) at once, then per-label values are
 %   aggregated and averaged (with tails trimmed).  This process improves
 %   speed over per-label masking on the whole image.
 %Collect label vectors
 lv.nuc = nuclm(mask.nuc);  lv.cyt = cytlm(mask.cyt);
-lvn = fieldnames(lv);       %Label names
+lvn = fieldnames(lv);  nlv = numel(lvn);       %Label names
 %Sort label vectors and determine indices bounding each label
 [lvs.nuc,lvsi.nuc] = sort(lv.nuc);  [lvs.cyt,lvsi.cyt] = sort(lv.cyt);
 ind.nuc = [0;find(diff(lvs.nuc));length(lvs.nuc)];
@@ -144,36 +193,76 @@ while ~isempty(injs)
     injs = injs(isnan(ind.cyt(injs+1)));
 end
 
+%   Initialize valcube
+valcube = nan(nnuc, 1, nlv*(nchan+nrt) + nagt + 3);
 lblidx = find(lbl)';        %Pre-define index of valid labels
-for sc = 1:nchan + nrt      %Includes cross-channel ratios
-    for sl = 1:numel(lvn)
-        %Get image vector
-        sr = sc - nchan;  isr = sr > 0;
-        if isr; 	imv = rim{sr}(mask.(lvn{sl}));
-        else       	imv = imin{sc}(mask.(lvn{sl}));    end
-        imv = imv(lvsi.(lvn{sl}));  %Sort image vector by appropriate label
-        
-        %Determine output 'channel' / valcube 'slice'
-        vcs = (~isr)*(sc + nchan*(sl-1)) + isr*(nvc + 2*(sr-1) + sl);
-        
-        %Process label-by-label values
-        for s = lblidx
-            %Collect labelled values
-            vals = imv(ind.(lvn{sl})(lbl(s))+1 : ind.(lvn{sl})(lbl(s)+1));
-            %Trim value distribution tails for robustness
-            %   i.e. outlier removal by exclusion of a percent of extrema
-            pctb = prctile(vals,outpct);
-            %Take mean of core values
-            valcube(s, 1, vcs) = mean(vals(vals>pctb(1) & vals<pctb(2)));
-            %   Note:  Percentile outlier exclusion also removes NaNs. 
+%Fill standard channels
+for sc = 1:nchan
+    for sl = 1:nlv
+        %Get image vector, and Sort by appropriate label
+        imv = imin{sc}(mask.(lvn{sl})); imv = imv(lvsi.(lvn{sl}));
+        %Get current valcube slice (channel) index
+        vcs = sc+nchan*(sl-1);
+        %Fill valcube slice (channel)
+        valcube(:, 1, sc+nchan*(sl-1)) = fillchan(valcube(:, 1, vcs), ...
+            imv, lbl, lblidx, ind.(lvn{sl}), outpct, @mean);        
+    end
+end
+
+%Fill ratio channels
+for sc = 1:nrt
+    for sl = 1:nlv
+        %Get image vector, and Sort by appropriate label
+        imv = rim{sc}(mask.(lvn{sl})); imv = imv(lvsi.(lvn{sl}));
+        %Get current valcube slice (channel) index
+        vcs = nchan*nlv + sl+2*(sc-1);
+        %Fill valcube slice (channel)
+        valcube(:, 1, vcs) = fillchan(valcube(:, 1, vcs), ...
+            imv, lbl, lblidx, ind.(lvn{sl}), outpct, @mean);        
+    end
+end
+
+%Fill additional aggregate function channels
+vcs = nlv*(nchan+nrt);
+for sa = 1:nagg
+    for sc = 1:numel(op.msk.aggfun(sa).chan)
+        for sl = numel(op.msk.aggfun(sa).loc)
+            %Get image vector, and Sort by appropriate label
+            imv = imin{ op.msk.aggfun(sa).chan(sc) }(mask.(lvn{sl})); 
+            imv = imv(lvsi.(lvn{ op.msk.aggfun(sa).loc(sl) }));
+            %Get current valcube slice (channel) index
+            vcs = vcs + 1;
+            %Fill valcube slice (channel)
+            valcube(:, 1, vcs) = fillchan(valcube(:, 1, vcs), imv, ...
+                lbl, lblidx, ind.(lvn{ op.msk.aggfun(sa).loc(sl) }),...
+                outpct, op.msk.aggfun(sa).fun);
         end
     end
 end
 
+%Store coordinate values, appended
+valcube(:,:, vcs + (1:3)) = cat(3, m.xCoord, m.yCoord, m.are);
+
 %Pack mask matrices for compression
 mask.nuc = bwpack(mask.nuc);  mask.cyt = bwpack(mask.cyt);
 
-%Store coordinate values, appended
-valcube(:,:,nvc+2*nrt + (1:3)) = cat(3, m.xCoord, m.yCoord, m.are);
+
+end
+
+
+%% Subfunction: Fill an output channel
+function vc = fillchan(vc, imv, lbl, lblidx, lidx, outpct, aggfun)
+%Process label-by-label values
+for s = lblidx
+    %Collect labelled values
+    vals = imv(lidx(lbl(s))+1 : lidx(lbl(s)+1));
+    %Trim value distribution tails for robustness
+    %   i.e. outlier removal by exclusion of a percent of extrema
+    pctb = prctile(vals,outpct); 
+    %Take mean of core values
+    vc(s) = aggfun(vals(vals>pctb(1) & vals<pctb(2)));
+    %   Note:  Percentile outlier exclusion also removes NaNs.
+end
+end
 
 

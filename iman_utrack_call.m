@@ -20,43 +20,40 @@
 %   Modified by MPargett, 5.8.15 
 %
 
-function tracksFinal = iman_utrack_call(movieInfo, p, op)
+function tracksFinal = iman_utrack_call(movieInfo, pin)
 %Version check provision
-if strcmpi(movieInfo,'version'); tracksFinal = 'v1.0'; return; end
-%   Assign provided parameters
-pdef.mergeSplit = 3;
-params = fieldnames(pdef);
-for s = 1:numel(params)
-   if ~isfield(op.trk, params{s})
-       op.trk.(params{s}) = pdef.(params{s});
-   end
-end
+if strcmpi(movieInfo,'version'); tracksFinal = 'v2.0'; return; end
+%   Set default parameters
+p = struct('movrad', 40, 'linkwin', 15, 'mergeSplit', 3, ...
+    'minTrkLength', 3, 'motionType', 0, 'bStdMult', 6, ...
+    'lStdMult', 6, 'gapPenalty', 1);    
+
+%Apply provided parameters
+for s = fieldnames(pin)'; 	p.(s{1}) = pin.(s{1});  end
 
 %INFORMATION NEEDED:
 %   Time Step
 %   Image Size / Pixel size
 
 %Global Parameters to employ throughout this procedure
-tWin = op.trk.linkwin;    %Time window of interest about a frame
-                              % Scaled on typical sampling time of 5 min
-iRad = op.trk.movrad/sqrt(p.PixSizeX.^2 + p.PixSizeY.^2);   %Radius of interest
-%   About a particle (cell centroid), scaled for 25 um
+%   p.linkwin;     %Time window of interest about a frame
+%   p.movrad;      %Radius of interest
 
 
 %Time Window to consider
-gapCloseParam.timeWindow = tWin; 
+gapCloseParam.timeWindow = p.linkwin; 
 %def: 7. maximum allowed time gap (in frames) between a track segment end
 %   and a track segment start that allows linking them. 
 %   This parameter is used for all time-based constraints
 
 %Merging/Splitting Flag
-gapCloseParam.mergeSplit = op.trk.mergeSplit;
+gapCloseParam.mergeSplit = p.mergeSplit;
 %1 if merging and splitting are to be considered, 2 if only merging is to
 %   be considered, 3 if only splitting is to be considered, 0 if no merging
 %   or splitting are to be considered.  
 
 %Minimum Track Length
-gapCloseParam.minTrackLen = 3;
+gapCloseParam.minTrackLen = p.minTrkLength;
 %def: 2. minimum length of track segments from linking to be used in gap
 %   closing. 
 
@@ -70,18 +67,18 @@ gapCloseParam.diagnostics = 0;
 costMatrices(1).funcName = 'costMatRandomDirectedSwitchingMotionLink';
 
 %Parameters
-parameters.linearMotion = 0; %use linear motion Kalman filter.
+parameters.linearMotion = p.motionType; %use linear motion Kalman filter.
 parameters.minSearchRadius = 2;  %Was 0
 %def: 2. minimum allowed search radius. The search radius is calculated on
 %   the spot in the code given a feature's motion parameters. If it happens
 %   to be smaller than this minimum, it will be increased to the minimum.  
-parameters.maxSearchRadius = iRad; %Was 40
+parameters.maxSearchRadius = p.movrad; %Was 40
 %def: 7. maximum allowed search radius. Again, if a feature's calculated
 %   search radius is larger than this maximum, it will be reduced to this
 %   maximum.  
 %   From typical 1280x1080 image (0.65um pixel), 40 is ~26 um
 
-parameters.brownStdMult = 6;  %Was 10
+parameters.brownStdMult = p.bStdMult;  %Was 10
 %def: 3.multiplication factor to calculate search radius from standard
 %   deviation.
 
@@ -89,7 +86,7 @@ parameters.useLocalDensity = 1;
 %1 if you want to expand the search radius of isolated features in the
 %   linking (initial tracking) step. 
 
-parameters.nnWindow = tWin; 
+parameters.nnWindow = p.linkwin; 
 %number of frames before the current one where you want to look to see a
 %   feature's nearest neighbor in order to decide how isolated it is (in
 %   the initial linking step).  
@@ -114,17 +111,17 @@ clear parameters
 costMatrices(2).funcName = 'costMatRandomDirectedSwitchingMotionCloseGaps';
 
 %parameters
-parameters.linearMotion = 0;  %0 Brownian, 1 Linear, 2 Linear no-reversing
+parameters.linearMotion = p.motionType;  %0 Brownian, 1 Linear, 2 Linear no-reversing
 parameters.minSearchRadius = 2;     %def: 2. Was 0.  Min search radius.
-parameters.maxSearchRadius = iRad;  %def: 7, Was 40. Max  search radius.
-parameters.brownStdMult = 6*ones(tWin,1);  %Was 3*...
+parameters.maxSearchRadius = p.movrad;  %def: 7, Was 40. Max  search radius.
+parameters.brownStdMult = p.bStdMult*ones(p.linkwin,1);  %Was 3*...
 %multiplication factor to calculate Brownian search radius from st.dev.
 
 parameters.brownScaling = [0.25 0.25]; 
 %def: [0.25 0.01].power for scaling the Brownian search radius with time,
 %   before and after timeReachConfB (next parameter). 
 %   MP:  I see no reason to have behavior shift like this
-parameters.timeReachConfB = 1; %Was 3, then tWin (unknown why)
+parameters.timeReachConfB = 1; %Was 3, then p.linkwin (unknown why)
 %before timeReachConfB, the search radius grows with time with the power in
 %   brownScaling(1); after timeReachConfB it grows with the power in
 %   brownScaling(2).    
@@ -139,15 +136,15 @@ parameters.lenForClassify = 5;
 parameters.useLocalDensity = 1; 
 %1 if you want to expand the search radius of isolated features in the gap
 %   closing and merging/splitting step. 
-parameters.nnWindow = tWin; 
+parameters.nnWindow = p.linkwin; 
 %number of frames before/after the current one where you want to look for a
 %   track's nearest neighbor at its end/start (in the gap closing step). 
-parameters.linStdMult = 6;  %Was 1*ones(tWin,1); 
+parameters.linStdMult = p.lStdMult;  %Was 1*ones(p.linkwin,1); 
 %multiplication factor to calculate linear search radius from st.dev.
 
 parameters.linScaling = [0.25 0.25]; 
 %def: [0.25 0.01].power for scaling the linear search radius with time
-parameters.timeReachConfL = 1;  %Was 4, then tWin (as with Brownian)
+parameters.timeReachConfL = 1;  %Was 4, then p.linkwin (as with Brownian)
 %similar to timeReachConfB, but for the linear part of the motion.
 
 parameters.maxAngleVV = 360;  %No constraint on motion directions
@@ -156,7 +153,7 @@ parameters.maxAngleVV = 360;  %No constraint on motion directions
 %   equivalent of a searchRadius but for angles.  
 
 %optional; if not input, 1 will be used (i.e. no penalty)
-parameters.gapPenalty = 1; 
+parameters.gapPenalty = p.gapPenalty; 
 %def: 1.5. penalty for increasing temporary disappearance time
 %   (disappearing for n frames gets a penalty of gapPenalty^n). 
 %   MP: Uncertain what this penalizes (fitness to link for gap closure?)

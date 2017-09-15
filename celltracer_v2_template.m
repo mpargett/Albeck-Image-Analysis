@@ -120,18 +120,30 @@ op.seg.cyt  = false; 	%Segment on cytoplasmic signal
 %       The following defaults are typical of MCF10As at 20x magnification
 op.seg.maxD = 40;       %Maximum nuclear diameter (pixels)
 op.seg.minD = 12;       %Minimum nuclear diameter (pixels)
-op.seg.minF = 0.8;      %Minimum 'form factor' (circularity)
+op.seg.maxEcc = 0.7;    %Maximum eccentricity [0-1] (opposite of circularity)
+op.seg.minExtent = 0.5; %Minimum fraction of bounding box filled [0-PI/4]
+
 %       It is recommended to scale imaging for nuclei (segmentation
 %       targets) to be greater than 10 pixels in diameter.
 op.seg.sigthresh = []; %[Optional] Minimum intensity of 'good' signal
 %   If you use sigthresh, pre-subtract any camera baseline
-op.seg.hardsnr = true;  %Typically kept to FALSE.  TRUE makes the signal 
+op.seg.hardsnr = false;  %Typically kept to FALSE.  TRUE makes the signal 
 %   threshold 'hard', enforcing cutoff of any pixels below it.
 
 %    Masking settings
 op.msk.rt = {};             %Pre-averaging channel ratios to take {{'',''}}
 op.msk.storemasks = false;  %Save all segmentation masks
 op.msk.saverawvals = true;  %Save all raw valcube entries (pre-tracking)
+%   IF additional aggregation functions are desired, define here
+%       For example:
+%           op.msk.aggfun.name = 'var';
+%           op.msk.aggfun.chan = {'CNAME1', 'CNAME2', ...};
+%           op.msk.aggfun.loc = {'Nuc','Cyt'};
+%           op.msk.aggfun.fun = @var;
+
+% Tracking settings (for utrack)
+op.trk.movrad = 25;     % Radius (in um) to consider for cell movement
+op.trk.linkwin = 75;    % Time window (in min) to consider for tracking
 
 %   Display settings - select which options to show while running
 op.disp.meta     = false;       %Final MetaData to be used

@@ -11,7 +11,7 @@ function [ip, op] = celltracer_v2_scripttest()
 %   --------- EDIT THIS SECTION TO DEFINE THE IMAGE DATA ---------
 %Data locations
 %   Target imaging data file name (include path)
-ip.fname = 'L:\albeck\imageData\2014 FILES\2014-05-12-FRA1 C.9.nd2';  
+ip.fname = 'L:\imageData\2014 FILES\2014-05-12-FRA1 C.9.nd2';  
 %   Target save name for processed data files (include path)
 ip.sname = 'celltracer_v2_test';  
 
@@ -100,7 +100,7 @@ fprintf('\nip.bkmd = \n\n');   display(ip.bkmd);
 %   -------- EDIT THIS SECTION TO SETUP THE PROCESSING RUN --------
 %Procedure scope - target ranges of the data to process
 op.cind     = 1:ip.indsz.c;    %Indices of Channels to process (names or indices)
-op.xypos    = [1,2,3,7,8];     %Indices of XY positions to process
+op.xypos    = [7,8];%[1,2,3,7,8];     %Indices of XY positions to process
 op.trng     = [2,6];       %Start and End indices of Time to process
 op.nW       = 4;        %Number of parallel workers to use
 op.unmix    = false;  	%Linearly unmix color channel cross-talk
@@ -116,11 +116,22 @@ op.seg.cyt  = true; 	%Segment on cytoplasmic signal
 %       The following defaults are typical of MCF10As at 20x magnification
 op.seg.maxD = 40;       %Maximum nuclear diameter (pixels)
 op.seg.minD = 12;       %Minimum nuclear diameter (pixels)
-op.seg.minF = 0.8;      %Minimum 'form factor' (circularity)
+op.seg.maxEcc = 0.9;    %Maximum eccentricity [0-1] (opposite of circularity)
+op.seg.minExtent = 0.65; %Minimum fraction of bounding box filled [0-PI/4]
 
 op.msk.rt = {{'CFP','YFP'}};  %Pre-averaging channel ratios to take
 op.msk.storemasks = false;    %Save all segmentation masks
 op.msk.saverawvals = true;    %Save all raw valcube entries (pre-tracking)
+%   IF additional aggregation functions are desired, define here
+%       For example:
+    op.msk.aggfun.name = 'var';
+    op.msk.aggfun.chan = {'YFP'};
+    op.msk.aggfun.loc = {'Nuc'};
+    op.msk.aggfun.fun = @var;
+
+% Tracking settings (for utrack)
+op.trk.movrad = 25;     % Radius (in um) to consider for cell movement
+op.trk.linkwin = 75;    % Time window (in min) to consider for tracking
 
 %   Display settings - select which options to show while running
 op.disp.meta     = true;       %Final MetaData to be used

@@ -100,7 +100,8 @@
 %       cyt - [log]         TRUE if need cytoplasmic segmentation.
 %       maxD - [num]        Max expected diameter of cell nuclei.
 %       minD - [num]        Min expected diameter of cell nuclei.
-%       minF - [num]        Min expected circularity of nuclei.
+%       maxEcc - [num]      Max eccentricity of a cell [0-1]
+%       minExtent - [num]   Min area/bounding_box_area of a cell [0-PI/4]
 %   msk - [struct]      Defines masking procedure options.
 %       fret - [struct]      FRET Channels (typ. copied from p.bkmd)
 %       freti - [num]        FRET indices (typ. autofilled in process)
@@ -108,6 +109,9 @@
 %           either indices or names.
 %       storemasks - [log]   TRUE to store nuclear/cytoplasm masks.
 %       storerawvals - [log] TRUE to store all unaligned segmented data.
+%   trk - [struct]      Defines the tracking procedure options.
+%       movrad -  [num]     Distance near a cell to consider tracking (um)
+%       linkwin - [num]     Time before a frame to consider tracking (min)
 %   disp - [struct]     Defines what to display during processing.
 %       meta - [log]        TRUE for MetaData as extracted and finalized.
 %       samples - [log]     TRUE for sample images mid-process.
@@ -117,7 +121,7 @@
 %       jc - [cell]         Java paths (e.g. for Bioformats).
 %       ml - [cell]         MATLAB paths.
 %
-%   Version 2.0
+%   Version 2.1
 
 %   M. Pargett, Albeck Lab, UC Davis, MCB.  2016
 
@@ -128,11 +132,11 @@
 function [dao, GMD, dmx] = iman_celltracer(p, op, varargin)
 %Version checking provision
 if strcmpi(p,'version')
-    dao = 'v2.0'; 
+    dao = 'v2.1'; 
     %Return structure detailing compatible versions of required code
     GMD = struct('imageaccess',1, 'getframe',1, 'getmeta',1, ...
-        'cellid',2, 'cellmask',2, 'xyshift',2, 'utrack_call',1, ...
-        'trackcoords',1, 'aligntrackdata',1, 'unmix',2, 'naming',1, ...
+        'cellid',2, 'cellmask',2, 'xyshift',2, 'utrack_call',2, ...
+        'trackcoords',2, 'aligntrackdata',1, 'unmix',2, 'naming',1, ...
         'refine',1);
     return; 
 end
@@ -214,6 +218,12 @@ GMD = iman_getmeta(dao, p.bkmd, op.mdover, op.disp.meta);
 
 
 %% PREPROCESSING PREPARATION  --------------------------------------------
+%Scale size parameter by pixel sizes to deliver values in # of pixels
+pxscl = sqrt(GMD.cam.PixSizeX.^2 + GMD.cam.PixSizeY.^2);
+op.seg.minD   = op.seg.minD./pxscl;   
+op.seg.maxD   = op.seg.maxD./pxscl;
+op.trk.movrad = op.trk.movrad./pxscl;
+
 %Prepare linear unmixing (channel cross-talk correction) if applicable
 if op.unmix; [~, dmx, mxs, op.msk.freti] = iman_unmix([],GMD);  %#ok<ASGLU>
 else dmx = [];  mxs = []; end    %#ok<NASGU>
@@ -333,7 +343,7 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
                 if op.unmix; im = iman_unmix(im,[],[],dmx,op.msk.freti); end
                 
                 %Perform Cell ID by segmentation
-                [movieInfo{ps}{1,s}, nmask] = iman_cellid(im, op, bkit);
+                [movieInfo{ps}{1,s}, nmask] = iman_cellid(im, op.seg, bkit);
                 
                 %Perform Cell signal measurement, by masking
                 [valcube{ps}{s}, masks{ps}{s}] = iman_cellmask(im, ...
@@ -403,11 +413,12 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
                 movieInfo(s), 'UniformOutput', false);
         end
         %Call uTrack (uses trackCloseGapsKalmanSparse)
-        tracksFinal = iman_utrack_call(movieInfo, GMD.cam, op);
+        tracksFinal = iman_utrack_call(movieInfo, op.trk);
         
         %Perform track cleanup to deliver xC and yC matrices
         %   Provides sliced matrices for contouring (ensuring integers)
-        coord = round(iman_trackcoords(tracksFinal));
+        [coord, linfo] = iman_trackcoords(tracksFinal); %#ok<ASGLU>
+        coord = round(coord);
         %   If only one time point, coord will be empty.  Fill.
         if numel(movieInfo) == 1;
             coord = cat(3,movieInfo.xCoord(:,1), movieInfo.yCoord(:,1));
@@ -434,7 +445,7 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
         dh = '0'; xystr = ['_xy', dh(op.xypos(h)<10), num2str(op.xypos(h))];
         bkg = bki{h}; %#ok<NASGU>
         save([p.sname, xystr, '.mat'], 'valcube', 'vcorder', 'vcraw', ...
-            'bkg', 'masks', 'ctrans');
+            'bkg', 'masks', 'ctrans', 'linfo');
         
         %Display status message
         t_el = toc(t_tot)/60;  t_rem = t_perxy*(nxy-h);

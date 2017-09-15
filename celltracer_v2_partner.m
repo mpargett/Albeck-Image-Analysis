@@ -39,32 +39,23 @@ fprintf('Validating image and run parameter definitions ...');
 % --- Parameter validation ---
 %Match/check channel names/indices to use (op.cind, allow string input)
 if isempty(op.cind);    op.cind = 1:numel(op.cname);	end
-if iscell(op.cind) || ischar(op.cind)
-    [op.cind, erm] = match_names(op.cind, op.cname); 
-    assert(isnumeric(op.cind) && isempty(erm), 'IMAN:cindCheck', ...
-        ['Validation failed. Channel names to use do not match ',...
-        'declared names. ', erm]);
-else assert(isnumeric(op.cind) && max(op.cind) <= numel(op.cname), ...
-        'IMAN:cindCheck', ['Validation failed. Channel indices to use ',...
-        'exceed number of declared channels. Verify op.cind against ',...
-        'op.cname/ip.bkmd.exp.Channel']);
-end
+[op.cind] = name_map(op.cind, op.cname, 'Index');
+assert(isnumeric(op.cind) && max(op.cind) <= numel(op.cname), ...
+    'IMAN:cindCheck', ['Validation failed. Channel indices to use ',...
+    'exceed number of declared channels. Verify op.cind against ',...
+    'op.cname/ip.bkmd.exp.Channel']);
+
 %Match/check segmentation channel (op.seg.chan, allow string input)
-if ischar(op.seg.chan) || iscell(op.seg.chan)
-    [op.seg.chan, erm] = match_names(op.seg.chan, op.cname); 
-    assert(isnumeric(op.seg.chan) && isempty(erm), 'IMAN:SegChanCheck', ...
-        ['Validation failed. Segmentation channel name does not ',...
-        'match declared names. ', erm]);
-elseif isempty(op.seg.chan) || ~isnumeric(op.seg.chan)
-    error('IMAN:SegChanCheck', ['Validation failed. Segmentation ',...
-        'channel, op.seg.chan, must be numeric or a string.']);
+[op.seg.chan] = name_map(op.seg.chan, op.cname, 'Segmentation', op.cind);
+
+%Match/check aggregation channels (op.seg.chan, allow string input)
+if ~isempty(op.msk.aggfun)
+[op.msk.aggfun.chan] = name_map(op.msk.aggfun.chan, op.cname, ...
+    'AggFun', op.cind);
+[op.msk.aggfun.loc] = name_map(op.msk.aggfun.loc, {'Nuc','Cyt'}, ...
+    'AggFunLoc');
 end
-%   Remap segmentation channel to reduced indices, as needed
-op.seg.chan = find(op.seg.chan == op.cind);
-assert(~isempty(op.seg.chan), 'IMAN:SegChanCheck', ['Validation failed. ',...
-    'Segmentation channel index not found within selected channel ',...
-    'indices. Verify name or index provided in op.seg.chan against ',...
-    'those in op.cind']);
+
 %Match/check requested pre-averaging ratios
 for s = 1:numel(op.msk.rt)
     if iscell(op.msk.rt{s})
@@ -193,12 +184,12 @@ ip = cell2struct( cell(size(ipfields)), ipfields, 2 );
 
 %Operation parameters
 opfields = {'cname', 'cind', 'xypos', 'trng', 'nW', 'objbias', 'unmix', ...
-            'fixshift', 'mdover', 'seg', 'msk', 'disp', 'pth'};
+            'fixshift', 'mdover', 'seg', 'msk', 'trk', 'disp', 'pth'};
 op = cell2struct( cell(size(opfields)), opfields, 2 );
     op.seg = struct('chan',[], 'cyt',false, 'maxD',[], 'minD', [], ...
                     'minF',[]);
     op.msk = struct('fret',[], 'freti',[], 'rt',{{}}, 'storemasks',false, ...
-                    'saverawvals',false);
+                    'saverawvals',false, 'aggfun', []);
     op.disp = struct('meta',false, 'samples',false, 'shifts', false, ...
                      'warnings',false);
 end
@@ -224,5 +215,26 @@ end
 
 end
 
+%% Channel name checking/remapping procedure
+function [cin] = name_map(cin, cref, ctype, cmap)
+%Match/check segmentation channel (op.seg.chan, allow string input)
+if ischar(cin) || iscell(cin)
+    [cin, erm] = match_names(cin, cref); 
+    assert(isnumeric(cin) && isempty(erm), ['IMAN:',ctype,'ChanCheck'], ...
+        ['Validation failed. ',ctype,' channel name does not ',...
+        'match declared names. ', erm]);
+elseif isempty(cin) || ~isnumeric(cin)
+    error(['IMAN:',ctype,'ChanCheck'], ['Validation failed. ',ctype,...
+        ' channel must be numeric or a string.']);
+end
+%   Remap segmentation channel to reduced indices, as needed
+if exist('cmap', 'var')
+    [chk,cin] = ismember(cin, cmap);
+    assert(all(chk), ['IMAN:',ctype,'ChanCheck'], ['Validation ',...
+        'failed. ',ctype,' channel index not found within selected ',...
+        'channel indices. Verify name or index provided against ',...
+        'those in op.cind']);
+end
 
+end
 

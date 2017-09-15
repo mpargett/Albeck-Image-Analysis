@@ -12,7 +12,7 @@ function [ip, op] = celltracer_v2_test_unmix()
 %   --------- EDIT THIS SECTION TO DEFINE THE IMAGE DATA ---------
 %Data locations
 %   Target imaging data file name (include path)
-ip.fname = ['L:\albeck\imageData\ProcessingValidation\',...
+ip.fname = ['L:\imageData\ProcessingValidation\',...
     '2016-03-15_cropMP.nd2'];    
 %   Target save name for processed data files (include path)
 ip.sname = 'celltracer_v2_test_unmix';  
@@ -110,11 +110,24 @@ op.seg.cyt  = true; 	%Segment on cytoplasmic signal
 %       The following defaults are typical of MCF10As at 20x magnification
 op.seg.maxD = 40;       %Maximum nuclear diameter (pixels)
 op.seg.minD = 12;       %Minimum nuclear diameter (pixels)
-op.seg.minF = 0.8;      %Minimum 'form factor' (circularity)
+op.seg.maxEcc = 0.7;    %Maximum eccentricity [0-1] (opposite of circularity)
+op.seg.minExtent = 0.5; %Minimum fraction of bounding box filled [0-PI/4]
 
+%       It is recommended to scale imaging for nuclei (segmentation
+%       targets) to be greater than 10 pixels in diameter.
+op.seg.sigthresh = []; %[Optional] Minimum intensity of 'good' signal
+%   If you use sigthresh, pre-subtract any camera baseline
+op.seg.hardsnr = false;  %Typically kept to FALSE.  TRUE makes the signal 
+%   threshold 'hard', enforcing cutoff of any pixels below it.
+
+%    Masking settings
 op.msk.rt = {};
 op.msk.storemasks = false;  	%Save all segmentation masks
 op.msk.saverawvals = true;  %Save all raw valcube entries (pre-tracking)
+
+% Tracking settings (for utrack)
+op.trk.movrad = 25;     % Radius (in um) to consider for cell movement
+op.trk.linkwin = 75;    % Time window (in min) to consider for tracking
 
 %   Display settings - select which options to show while running
 op.disp.meta     = false;       %Final MetaData to be used
