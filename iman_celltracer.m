@@ -214,12 +214,12 @@ msg = sprintf(['DAO loaded. ', datestr(now, 'mm/dd HH:MM PM')]);
 disp(msg); msg = [];   %Clear msg to prevent partial erasing on next update
 
 %Collect image MetaData (and assert completeness)
-GMD = iman_getmeta(dao, p.bkmd, op.mdover, op.disp.meta);
+GMD = iman_getmeta(dao, p.bkmd, op);
 
 
 %% PREPROCESSING PREPARATION  --------------------------------------------
 %Scale size parameter by pixel sizes to deliver values in # of pixels
-pxscl = sqrt(GMD.cam.PixSizeX.^2 + GMD.cam.PixSizeY.^2);
+pxscl = (GMD.cam.PixSizeX + GMD.cam.PixSizeY)./2;
 op.seg.minD   = op.seg.minD./pxscl;   
 op.seg.maxD   = op.seg.maxD./pxscl;
 op.trk.movrad = op.trk.movrad./pxscl;
@@ -548,7 +548,7 @@ switch in
             subplot(nChan,2,1+(ds-1)*2);
             set(gca,'Position', get(gca,'Position') + ...
                 [-0.08, -0.02*ds, 0.1, 0.06] );
-            imshow(dbk.orim(:,:,ds), [],...
+            imshow(imresize(dbk.orim(:,:,ds), [dsz.y,dsz.x]/2), [],...
                 'Border', 'tight', 'InitialMagnification', 'fit');
             lh = ylabel(GMD.exp.Channel{ds});
             lhp = get(lh,'Position'); ax = axis;

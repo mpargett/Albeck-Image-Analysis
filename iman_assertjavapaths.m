@@ -9,6 +9,7 @@ function [pth] = iman_assertjavapaths
 %--------------------------------------------------------------------------
 %   Collect pre-defined paths
 p = iman_pathdefs();
+p = structfun(@(x)regexprep(x, '([^\\|/])$', '$1\\'), p, 'Un', 0);
 
 %Remove typically problematic MATLAB paths
 rmpath(['', p.bad{:}]);
@@ -53,7 +54,7 @@ end
 %--------------------------------------------------------------------------
 %Code for Image Processing, Bio-Formats, and u-Track
 addpath(p.code, p.bioformats, ...
-            p.utrack, [p.utrack,'\mex'], [p.utrack,'\kdtree']);
+            p.utrack, [p.utrack,'mex'], [p.utrack,'kdtree']);
 
 %Add desired bioformats package to dynamic java class path
 if ~isempty(pth.jc) %Only if a new path is available

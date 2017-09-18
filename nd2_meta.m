@@ -2,38 +2,39 @@
 %   Extract global meta data from ND2 file
 %
 
-%NOT YET COMPLETE.  Update help header with info for expected field values.
+%Update help header with info for expected field values.
 
 
-function md = nd2_meta(r, ri, bkin, vb)
+function md = nd2_meta(r, ri, bkin, op)
 %Metadata structure design
-%      FieldName         Text Search           Search Location  Units 
+%      FieldName         Text Search           Search Location  Units           %Is Required 
 %Objective Metadata
-mdi.obj.Desc =           {'.+plan.+apo.+',           'value',    ''};
-mdi.obj.NA =             {'numerical\s+aperture',    'key',      'none'};
-mdi.obj.Mag =            {'magnification',           'key',      'none'};
-mdi.obj.WkDist =         {'working\s+dist',          'key',      'mm'};
-mdi.obj.RefIndex =       {'refract\w+\s+\index',     'key',      'none'};
+mdi.obj.Desc =           {'.+plan.+apo.+',           'value',    '',            false};
+mdi.obj.NA =             {'numerical\s+aperture',    'key',      'none',       	op.objbias};
+mdi.obj.Mag =            {'magnification',           'key',      'none',       	op.objbias};
+mdi.obj.WkDist =         {'working\s+dist',          'key',      'mm',         	op.objbias};
+mdi.obj.RefIndex =       {'refract\w+\s+\index',     'key',      'none',       	op.objbias};
 
 %Camera Metadata
-mdi.cam.Desc =           {'camera\s+name',           'key',      ''};
-mdi.cam.PixSizeX =       {'calibration',             'key',      'um'};
-mdi.cam.PixSizeY =       {'calibration',             'key',      'um'};
-mdi.cam.PixNumX =        {'uiwidth$',                'key',      'none'};
-mdi.cam.PixNumY =        {'uiheight$',               'key',      'none'};
-mdi.cam.BinSizeX =       {'dbinningx',               'key',      'none'};
-mdi.cam.BinSizeY =       {'dbinningy',               'key',      'none'};
+mdi.cam.Desc =           {'camera\s+name',           'key',      '',            false};
+mdi.cam.PixSizeX =       {'calibration',             'key',      'um',        	true};
+mdi.cam.PixSizeY =       {'calibration',             'key',      'um',         	true};
+mdi.cam.PixNumX =        {'uiwidth$',                'key',      'none',       	true};
+mdi.cam.PixNumY =        {'uiheight$',               'key',      'none',       	true};
+mdi.cam.BinSizeX =       {'dbinningx',               'key',      'none',       	false};
+mdi.cam.BinSizeY =       {'dbinningy',               'key',      'none',       	false};
 
 %Experiment Metadata may be multi-valued, per Channel
-mdi.exp.Light    =       {'lightfullname0',          'key',      ''};
-mdi.exp.MultiLaser =     {'multilaserfullname0',     'key',      ''};
+mdi.exp.Light    =       {'lightfullname0',          'key',      '',            op.unmix};
+mdi.exp.MultiLaser =     {'multilaserfullname0',     'key',      '',            op.unmix};
 nc = r.getSizeC;
 for s = 1:nc
-mdi.exp.Channel(s,:) =   {['name\s+#',num2str(s)],           'key',      ''};
-mdi.exp.Exposure(s,:) =  {['exposure\s+#',num2str(s)],       'key',      'ms'};
-mdi.exp.ExVolt(s,:) =    {['sola.+voltage\s+#',num2str(s)],  'key',      ''};mdi.exp.Filter(s,:) =    {['filter.+turret.+\s+#',num2str(s)],  'key',   ''};
-mdi.exp.FPhore(s,:) =    {['fluorophore',num2str(s)],            'key',  ''};
-mdi.exp.GainMode =       {['conversion\s?gain\s+#',num2str(s)],  'key',  ''};
+mdi.exp.Channel(s,:) =   {['name\s+#',num2str(s)],           'key',      '',  	true};
+mdi.exp.Exposure(s,:) =  {['exposure\s+#',num2str(s)],       'key',      'ms', 	op.unmix};
+mdi.exp.ExVolt(s,:) =    {['sola.+voltage\s+#',num2str(s)],  'key',      '',   	op.unmix};
+mdi.exp.Filter(s,:) =    {['filter.+turret.+\s+#',num2str(s)],  'key',   '',   	op.unmix};
+mdi.exp.FPhore(s,:) =    {['fluorophore',num2str(s)],            'key',  '',   	op.unmix};
+mdi.exp.GainMode =       {['conversion\s?gain\s+#',num2str(s)],  'key',  '',  	false};
 end
 
     
@@ -52,7 +53,7 @@ n = n(gind); v = v(gind);
 md = extract_mdata(n, v, mdi);
 
 %Display Metadata from ND2 file
-if vb
+if op.disp.meta
 display('Showing Metadata extracted from the ND2 file:');
 for s = fieldnames(md)';  display(s{1});  display(md.(s{1}));   end
 end
@@ -67,13 +68,13 @@ md.exp = rmfield(md.exp, 'MultiLaser');
 
 %Check defined Metadata for empty fields and request values
 if ~exist('bkin','var'); bkin = []; else display('Using backup metadata.'); end
-md = check_mdata_complete(md, bkin);
+md = check_mdata_complete(md, mdi, bkin);
 
 %Metadata clean up (ensure naming uniformity, unit nomenclature)
 md = md_cleanup(md, mdi);
 
 %Double-check Metadata completeness (Clean up may clear fields)
-md = check_mdata_complete(md, bkin);
+md = check_mdata_complete(md, mdi, bkin);
 
 
 end
@@ -127,19 +128,21 @@ end
 
 
 %% Metadata completeness checking
-function md = check_mdata_complete(md, bkin, prnt)
+function md = check_mdata_complete(md, mdi, bkin, prnt)
 %Initialize
 if ~exist('prnt','var'); prnt = '';
-elseif isstruct(bkin) && isfield(bkin,prnt); bkin = bkin.(prnt); end 
+elseif isstruct(bkin) && isfield(bkin,prnt); bkin = bkin.(prnt); end
 isfirstwarn = true;
+%   Determine is space character is needed
+if isempty(prnt); spc = ''; else spc = '.'; end
 
 %Checking routine
 fn = fieldnames(md);
 for s = 1:length(fn)
     if isstruct(md.(fn{s}))
         %IF structure, recursively check each field
-        if isempty(prnt); spc = ''; else spc = '.'; end
-        md.(fn{s}) = check_mdata_complete(md.(fn{s}), bkin, [prnt,spc,fn{s}]);
+        md.(fn{s}) = check_mdata_complete(md.(fn{s}), ...
+                                mdi, bkin, [prnt,spc,fn{s}]);
     else
         %If not a structure, check / request values / return
         if iscell(md.(fn{s}))
@@ -163,11 +166,13 @@ for s = 1:length(fn)
                 isfirstwarn = false;
             end
             %   Get current value of bad field
-            %Request input to fill field
-            md.(fn{s}) = input(['\nEnter value(s) for: ', prnt,'.',fn{s}, ...
-                '\n    This field ',...
-                'requires ', num2str(length(md.(fn{s}))), ' value(s) ',...
-                '\n    New value(s): ']);
+            if mdi.([prnt,spc,fn{s}]){4}
+                %Request input to fill field
+                md.(fn{s}) = input(['\nEnter value(s) for: ', prnt,'.',...
+                    fn{s}, '\n    This field ','requires ', ...
+                    num2str(length(md.(fn{s}))), ' value(s) ',...
+                    '\n    New value(s): ']);
+            end
         end
     end
 end

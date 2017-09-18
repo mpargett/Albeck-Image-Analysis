@@ -31,6 +31,9 @@
 %               chan    -Channel indices on which to use
 %               loc     -Localization(s) on which to use (1: Nuc, 2:Cyt)
 %               fun     -Function handle to be applied
+%       msk.cytadj  -Adjustments to cytoplasmic masking distances, positive
+%                       values increase 'ring' radius and width, negative
+%                       values decrease (pixels).  Default: 0
 %
 
 %FIXME scale EfA averaging with FRET concentration
@@ -43,8 +46,10 @@ function [valcube, mask] = iman_cellmask(imin, m, op, nmasks)
 if strcmpi(imin,'version'); valcube = 'v2.2'; return; end
 
 %% Operation parameters
-ncgap  = floor((0.05*op.seg.maxD)) + 2;  %Size of gap between nuc mask and cyto
-ncring = floor((0.05*op.seg.maxD)) + 1;  %Desired cyto mask thickness
+ncgap  = round((0.05*op.seg.maxD)) + 2;  %Size of gap between nuc mask and cyto
+ncring = round((0.05*op.seg.maxD)) + 1;  %Desired cyto mask thickness
+if isfield(op.msk, 'cytadj');   %IF masking adjustments provided, apply
+    ncgap = ncgap + op.msk.cytadj;  ncring = ncring + op.msk.cytadj; end
 ncexpand = ncgap + ncring;  %Size to expand nuclear mask for cyto
 outpct = [20,80];                   %Percentiles to reject for outliers
 

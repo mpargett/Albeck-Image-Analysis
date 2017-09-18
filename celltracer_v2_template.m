@@ -118,13 +118,13 @@ op.mdover   = {'exp', 'ExVolt'; 'exp', 'Exposure';'exp','Filter'; ...
 op.seg.chan = [];       %Color channel on which to segment
 op.seg.cyt  = false; 	%Segment on cytoplasmic signal
 %       The following defaults are typical of MCF10As at 20x magnification
-op.seg.maxD = 40;       %Maximum nuclear diameter (pixels)
-op.seg.minD = 12;       %Minimum nuclear diameter (pixels)
-op.seg.maxEcc = 0.7;    %Maximum eccentricity [0-1] (opposite of circularity)
-op.seg.minExtent = 0.5; %Minimum fraction of bounding box filled [0-PI/4]
-
+op.seg.maxD = 25;       %Maximum nuclear diameter (um)
+op.seg.minD = 8;      	%Minimum nuclear diameter (um)
 %       It is recommended to scale imaging for nuclei (segmentation
 %       targets) to be greater than 10 pixels in diameter.
+op.seg.maxEcc = 0.9;    %Maximum eccentricity [0-1] (opposite of circularity)
+op.seg.Extent = [0.65, 0.85]; %Minimum fraction of bounding box filled 
+%   Extent range is [0-1], value for a cirlce is PI/4
 op.seg.sigthresh = []; %[Optional] Minimum intensity of 'good' signal
 %   If you use sigthresh, pre-subtract any camera baseline
 op.seg.hardsnr = false;  %Typically kept to FALSE.  TRUE makes the signal 

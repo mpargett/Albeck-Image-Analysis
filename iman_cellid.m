@@ -17,10 +17,11 @@
 %       maxEcc      -Maximum Eccentricity of acceptable nucleus shapes
 %                   (Eccentricity is deviation from circular shape, [0-1] 
 %                    0 for a circle, 1 for a line)
-%       minExtent   -Minimum 'Extent' of acceptable nucleus shapes
-%                   (Extent is the ratio of the shape area to the area of
-%                    its bounding box, rotated to match the shape's
-%                    orientation, [0-PI/4])
+%       Extent      -Minimum and Maximum 'Extent' values of acceptable
+%                    nucleus shapes (Extent is the ratio of the shape area
+%                    to the area of its bounding box, rotated to match the
+%                    shape's orientation, [0-1], value for a circle or
+%                    ellipse is PI/4.
 %       sigthresh   -Signal value to use as a foreground threshold
 %       hardsnr     -Logical - TRUE is sigthresh is a hard cutoff
 %       nth         -Number of thresholds to use for segmentation
@@ -36,8 +37,8 @@ if strcmpi(im,'version'); movieInfo = 'v2.1'; return; end
 
 %% Operation parameters
 %Default parameters
-p = struct('chan', 1, 'cyt', false, 'minD', 10, 'maxD', 40, ...
-           'maxEcc', 0.7, 'minExtent', 0.5, 'sigthresh', [], ...
+p = struct('chan', 1, 'cyt', false, 'minD', 8, 'maxD', 25, ...
+           'maxEcc', 0.9, 'Extent', [0.65,0.9], 'sigthresh', [], ...
            'hardsnr', false, 'nth', 20);
 
 %Apply provided parameters
@@ -74,17 +75,22 @@ st1 = strel('disk', ceil(flts/4));  st2 = strel('disk', 2*ceil(flts/4));
 
 %% Image filtering (IF necessary, i.e. using edge filters for cyto)
 if p.cyt
+    %   Filter out background by setting it to uniform level
+    stim(~stim_fore) = stim_bkg.*(bkg_rat);
+    tstim = stim;       %Temporary copy of original image
     %Create a predefined 2d filter. "Sobel edge-emphasizing filter"
     hy = fspecial('sobel');   hx = hy';
     %Filter image for edges (gradients, via the Sobel filter)
     stim = sqrt(imfilter(stim, hx, 'replicate').^2 ...  %Across x axis.
              + imfilter(stim, hy, 'replicate').^2);     %Across y axis.
-    stim = max(stim(:)) - stim;         %Invert to make gradients 'low' 
+    %Invert to make gradients 'low', and subtract original image (penalizes
+    %   regions with high intensity, so bright spot are not kept)
+    stim = max(stim(:)) - stim - tstim;     clear tstim;
 end
 
 %% Image thresholding search
 %Define thresholds at linearly spaced quantiles
-thresholds = quantile(stim(stim_fore), linspace(0.05, 0.95, p.nth) );
+thresholds = prctile(stim(stim_fore), linspace(5, 95, p.nth) );
 clear stim_fore;
 
 %Revision:  For each threshold, store nucleus estimates
@@ -116,7 +122,8 @@ for s = 1:length(thresholds)
     
     %Determine objects passing size/shape fiters
     scorePass  = nucArea > minNucArea & nucArea < maxNucArea &...
-        cat(1,S.Eccentricity) < p.maxEcc & nucExt > p.minExtent;
+        cat(1,S.Eccentricity) < p.maxEcc & ...
+        nucExt > p.Extent(1) & nucExt < p.Extent(2);
     
     %Store passing spots (overwrite older, which are always smaller)
     for ss = find(scorePass)'; enuc(S(ss).PixelIdxList) = true; end
@@ -126,7 +133,7 @@ end
 %Erode further if a cytoplasmic segmentation
 %   Gradients in cyto view tend to overestimate the nucleus
 %   Erode depth scaled by minimum nuc diameter (prevent overerosion)
-if p.cyt  
+if p.cyt && erode_grad > 0 
     enuc = imerode(enuc, strel( 'disk', erode_grad ));    
 end
 

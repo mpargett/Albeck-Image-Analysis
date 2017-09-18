@@ -2,14 +2,14 @@
 %   Collect MetaData associated with a Data Access Object
 
 
-function GMD = iman_getmeta(dao, bkmd, mdover, showmd)
+function GMD = iman_getmeta(dao, bkmd, op)
 %Version check provision
 if strcmpi(dao,'version'); GMD = 'v1.0'; return; end
 
 %Search for MetaData, depending on data type
 switch lower(dao.type)
     case 'nd2'
-        GMD = nd2_meta(dao.read, dao.rinfo, bkmd, showmd);
+        GMD = nd2_meta(dao.read, dao.rinfo, bkmd, op);
     case 'image'
         GMD = struct();  %Initialize, but leave be fill with backup
         %FIXME: Assert that bkmd is complete, prompt with specifics needed?
@@ -17,9 +17,10 @@ end
 
 %Enact override of file metadata, if applicable
 %   Enforce backup values as requested
-if ~isempty(mdover);
-    for s = 1:size(mdover,1)
-        GMD.(mdover{s,1}).(mdover{s,2}) = bkmd.(mdover{s,1}).(mdover{s,2});
+if ~isempty(op.mdover);
+    for s = 1:size(op.mdover,1)
+        GMD.(op.mdover{s,1}).(op.mdover{s,2}) = ...
+            bkmd.(op.mdover{s,1}).(op.mdover{s,2});
     end
 end
 
