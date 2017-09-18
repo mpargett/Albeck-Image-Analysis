@@ -9,7 +9,7 @@ function [pth] = iman_assertjavapaths
 %--------------------------------------------------------------------------
 %   Collect pre-defined paths
 p = iman_pathdefs();
-p = structfun(@(x)regexprep(x, '([^\\|/])$', '$1\\'), p, 'Un', 0);
+p = structfun(@(x)regexprep(x, '([^\\|/|;])$', '$1\\'), p, 'Un', 0);
 
 %Remove typically problematic MATLAB paths
 rmpath(['', p.bad{:}]);
