@@ -130,6 +130,10 @@ op.seg.sigthresh = []; %[Optional] Minimum intensity of 'good' signal
 op.seg.hardsnr = false;  %Typically kept to FALSE.  TRUE makes the signal 
 %   threshold 'hard', enforcing cutoff of any pixels below it.
 
+% Tracking settings (for utrack)
+op.trk.movrad = 25; % radius (in um) to consider for cell movement during track linking
+op.trk.linkwin = 75; % time (min) 
+
 %    Masking settings
 op.msk.rt = {};             %Pre-averaging channel ratios to take {{'',''}}
 op.msk.storemasks = false;  %Save all segmentation masks
