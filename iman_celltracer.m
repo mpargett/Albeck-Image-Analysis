@@ -149,6 +149,7 @@ vv = version;  vv = str2double(regexp(vv, '^\d*\.\d*', 'match'));
 if ~op.disp.warnings
     warning('off', 'MATLAB:Java:DuplicateClass');
     warning('off', 'IMAN:Celltrace');
+    warning('off', 'MATLAB:mat2cell:TrailingUnityVectorArgRemoved');
 end
 
 %Evaluate scale of processing

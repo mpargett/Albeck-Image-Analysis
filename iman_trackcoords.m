@@ -24,6 +24,10 @@ nC = sum( ntk );        % # of Cells
 
 c = nan(nC, nT, 2);     %Initialize Coordinate matrix
 whosmymommy = nan(nC, 2);      %Initialize Lineage matrix
+%   Short circuit for empty data (e.g. single-frame movie) 
+if isempty(nT) || any([nct, nC, nT] == 0); 
+    c = [];   whosmymommy = [];   return;   end
+
 %% Extract each tracks coordinates and lineage info
 for s = 1:nct
     %Note: seqOfEvents gives: 1-frame index of event, 2-(1=start, 2=end),
