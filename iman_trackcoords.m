@@ -55,6 +55,30 @@ end
 %NaNify zero values coordinates
 c(c==0) = NaN;
 
+%Sort tracks, first by start time, then by length
+cg = ~isnan(c(:,:,1));  %Logical matrix for good indices
+%   Get indices for starts (pattern = FALSE, TRUE), working along tracks
+[tst, ci] = find( (cg & ~[false(nC,1), cg(:,1:end-1)])' );
+%   Get first start index per cell track (ignore starts after gaps)
+[~,st1,~] = unique(ci);  tst = tst(st1);
+%   Get length of tracks
+tlength = sum(cg, 2);   tlength(tlength == 0) = NaN;
+%   Ensure alignment of starts if any tracks are empty
+tstart = nan(nC,1);     tstart(tlength > 0) = tst;
+
+%Sort lineage indices to match
+[~,sli] = sort(tlength, 'descend');     %First on length (becomes secondary)
+[~,sti] = sort(tstart(sli), 'ascend'); 	%Last on start time (primary)
+%   Apply final sort order
+si = sli(sti);  c = c(si,:,:);  whosmymommy = whosmymommy(si,:);
+%   Invert sorting order for lineage mapping
+[~,isi] = sort(si);
+%   Apply sorting to lineage values
+for s = unique(whosmymommy(~isnan(whosmymommy)))'	
+    whosmymommy(whosmymommy == s) = isi(s);  
+end
+
+
 %% Interpolate gaps in coordinate vectors
 %   Fill bounded NaNs with interpolated values (NaNs outside stay NaN)
 index = 1:nT;

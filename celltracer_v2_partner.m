@@ -60,11 +60,12 @@ end
 for s = 1:numel(op.msk.rt)
     if iscell(op.msk.rt{s})
         if ischar(op.msk.rt{s}{1})
-            [op.msk.rt{s}, erm] = match_names(op.msk.rt{s}, op.cname);
-            if ~isempty(erm);   op.msk.rt(s) = []; fprintf('\n');
-                warning('IMAN:RatioCheck', ['Some ratio channel names ',...
-                    'not found. ', erm]);
-            end
+            [op.msk.rt{s}] = name_map(op.msk.rt{s}, op.cname,...
+                'Ratio', op.cind);
+%             if ~isempty(erm);   op.msk.rt(s) = []; fprintf('\n');
+%                 warning('IMAN:RatioCheck', ['Some ratio channel names ',...
+%                     'not found. ', erm]);
+%             end
         elseif isnumeric(op.msk.rt{s}{1}); op.msk.rt{s} = [op.msk.rt{s}{:}];
         end
     end
@@ -79,14 +80,15 @@ assert( max(op.cind) <= ip.indsz.c && max(op.xypos) <= ip.indsz.xy && ...
 
 % --- Background review ---
 ip.bkg = ip.bkg(op.xypos);   	%Restrict background to XYs used
-nreg = [4, numel(op.cind)];
 %Assert proper sizes of background region definitions
-bkc = arrayfun(@(x)~isempty(x.altxy) || (x.fix && numel(x.reg) == nreg(2)) || ...
+bkc = arrayfun(@(x)~isempty(x.altxy) || (x.fix && numel(x.reg) == ip.indsz.c) || ...
     (numel(x.reg) == 4 && x.reg(1)<x.reg(2) && x.reg(3)<x.reg(4)), ip.bkg);
 assert(all(bkc), 'IMAN:bkgCheck', sprintf(['Validation failed. ',...
     'Background regions for XY position(s) ', repmat('%d, ', 1, ...
     nnz(~bkc)-1), repmat('and ', 1, nnz(~bkc)>1), '%d',' are improperly ',...
     'sized or defined. Review ip.bkg for compliance.'], op.xypos(~bkc)));
+%Rescrict any fixed values to current channels
+for sb = find([ip.bkg.fix]); ip.bkg(sb).reg = ip.bkg(sb).reg(op.cind); end
 % --- ---------------------------------------------------------------- ---
 
 % --- Backup MetaData review ---
@@ -115,18 +117,6 @@ if op.unmix
         numel(ip.bkmd.exp.FPhore)), 'IMAN:bkmdCheck', ['Validation failed. ',...
         'The number of names for Channels, Filters, and Fluorophores in ',...
         'ip.bkmd.exp do not match.']);
-    %Validate if specifying SPECTRAX (multi-line) light source
-    if any(strcmpi(ip.bkmd.exp.Light, {'SPECTRAX'}))  %IF a multi-line source
-        mln = {'ExVolt', 'ExLine', 'ExWL'};
-        exc = cellfun(@(x)iscell(ip.bkmd.exp.(x)), mln);
-        if all(exc); exc = cellfun(@(x)cellfun(@(y)numel(y), ip.bkmd.exp.(x)),...
-                mln, 'UniformOutput', false); else exc = {1,2,3}; end
-        assert(isequal(exc{:}), 'IMAN:bkmdCheck', ['Validation failed. ',...
-            'When specifying a multi-line light source (e.g. SPECTRAX), ',...
-            'ExVolt, ExLine and ExWL must all be cell array with the same ',...
-            'number of elements and the size of each entry must match among ',...
-            'the three fields.']);
-    end
     %Validate FRET names match Channel names
     if ~isempty(ip.bkmd.exp.FRET)
         frtn = struct2cell(ip.bkmd.exp.FRET); frtn = [frtn{:}];
@@ -135,6 +125,18 @@ if op.unmix
             'FRET component names to not match Channel names in ip.bkmd.exp: ', ...
             repmat('%s, ', nnz(~frtv)-1), '%s.'], frtn{~frtv});
     end
+end
+%   Validate if specifying SPECTRAX (multi-line) light source
+if any(strcmpi(ip.bkmd.exp.Light, {'SPECTRAX'}))  %IF a multi-line source
+    mln = {'ExVolt', 'ExLine', 'ExWL'};
+    exc = cellfun(@(x)iscell(ip.bkmd.exp.(x)), mln);
+    if all(exc); exc = cellfun(@(x)cellfun(@(y)numel(y), ip.bkmd.exp.(x)),...
+            mln, 'UniformOutput', false); else exc = {1,2,3}; end
+    assert(isequal(exc{:}), 'IMAN:bkmdCheck', ['Validation failed. ',...
+        'When specifying a multi-line light source (e.g. SPECTRAX), ',...
+        'ExVolt, ExLine and ExWL must all be cell array with the same ',...
+        'number of elements and the size of each entry must match among ',...
+        'the three fields.']);
 end
 % --- ---------------------------------------------------------------- ---
 
@@ -228,7 +230,7 @@ elseif isempty(cin) || ~isnumeric(cin)
     error(['IMAN:',ctype,'ChanCheck'], ['Validation failed. ',ctype,...
         ' channel must be numeric or a string.']);
 end
-%   Remap segmentation channel to reduced indices, as needed
+%   Remap channel to reduced indices, as needed
 if exist('cmap', 'var')
     [chk,cin] = ismember(cin, cmap);
     assert(all(chk), ['IMAN:',ctype,'ChanCheck'], ['Validation ',...
