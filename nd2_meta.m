@@ -51,6 +51,13 @@ n = n(gind); v = v(gind);
 
 %Extract Metadata to the defined format
 md = extract_mdata(n, v, mdi);
+%   Check for cell-encapuslated main names, and free
+mn = {'obj', 'Desc'; 'cam', 'Desc'; 'exp', 'Light'; 'exp', 'MultiLaser'};
+for sn = 1:size(mn,1);
+    if iscell(md.(mn{s,1}).(mn{s,2}))
+        md.(mn{s,1}).(mn{s,2}) = cell2mat(md.(mn{s,1}).(mn{s,2})); 
+    end
+end
 
 %Display Metadata from ND2 file
 if op.disp.meta
@@ -116,7 +123,7 @@ else
             out = temp;
         %Reduce cell if only 1 value or all values are numeric
         elseif ~any(cellfun('isempty',out(1,s))) && ...
-            ( length(out) == 1 || all(cellfun(@isnumeric,out)) )
+            all(cellfun(@isnumeric,out))
             out = cell2mat(out);
         end
         %Enforce positive numeric values
