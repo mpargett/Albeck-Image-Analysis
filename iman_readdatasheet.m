@@ -272,6 +272,9 @@ function out = eparse(x, tt, uu)
 if ~iscell(x); x = {x}; uncell = true; else uncell = false; end
 x = cellfun(@num2str, x, 'UniformOutput', false);   %Ensure characters
 
+%Catch alternative unit phrasings
+x = regexprep(x, {'d(ay)?s?','h(ou)?rs?', 'mi?n(ute)?s?', ...
+    'sec(ond)?s?', 'tps'}, {'d','h','m','s','tp'});
 
 %Look for entry separation (via semi-colons)
 tmp = regexpi(x, ';', 'split');
