@@ -66,7 +66,8 @@ for s = fieldnames(md)';  display(s{1});  display(md.(s{1}));   end
 end
 
 %Check for Multi-Line Light Source
-if cellfun(@isempty, regexpi(md.exp.Light,      'sola', 'match')) && ...
+if ( ~ischar(md.exp.Light) || ...
+        cellfun(@isempty, regexpi(md.exp.Light, 'sola', 'match')) ) && ...
   ~cellfun(@isempty, regexpi(md.exp.MultiLaser, '(multilaser|spectra)', 'match'))
     md.exp = get_multilinepar(md.exp, n, v, nc);
 end

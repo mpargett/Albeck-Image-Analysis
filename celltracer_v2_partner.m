@@ -57,17 +57,14 @@ if ~isempty(op.msk.aggfun)
 end
 
 %Match/check requested pre-averaging ratios
-for s = 1:numel(op.msk.rt)
-    if iscell(op.msk.rt{s})
-        if ischar(op.msk.rt{s}{1})
+for s = 1:numel(op.msk.rt)  %Check each element
+    if iscell(op.msk.rt{s})     %Check if is cell (typical)
+        if ischar(op.msk.rt{s}{1})  %Check if char names
             [op.msk.rt{s}] = name_map(op.msk.rt{s}, op.cname,...
-                'Ratio', op.cind);
-%             if ~isempty(erm);   op.msk.rt(s) = []; fprintf('\n');
-%                 warning('IMAN:RatioCheck', ['Some ratio channel names ',...
-%                     'not found. ', erm]);
-%             end
+                'Ratio', op.cind);  %Map to channel indices
         elseif isnumeric(op.msk.rt{s}{1}); op.msk.rt{s} = [op.msk.rt{s}{:}];
         end
+    elseif isempty(op.msk.rt{s}); op.msk.rt(s) = [];  %Remove empty entries
     end
 end
 %Check index ranges requested
