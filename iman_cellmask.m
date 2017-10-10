@@ -58,7 +58,7 @@ if numel(imin) < 10;    sz = imin;  else    sz = size(imin);    end
 if numel(sz) > 2; nchan = sz(3);  sz = sz(1:2); else nchan = 1; end	
 
 %Check number of cross-channel ratios requested
-nrt = sum(~cellfun(@isempty,op.msk.rt));
+nrt = numel(op.msk.rt);
 %Check for additional aggregation functions
 if isfield(op.msk,'aggfun')
     nagg = numel(op.msk.aggfun); 
