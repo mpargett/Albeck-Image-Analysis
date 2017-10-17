@@ -57,6 +57,9 @@ if ~isempty(op.msk.aggfun)
 end
 
 %Match/check requested pre-averaging ratios
+%   Assert proper encapsulation of single ratio (common error)
+if (length(op.msk.rt)==2 && ischar(op.msk.rt{1})) || isnumeric(op.msk.rt); 
+    op.msk.rt = {op.msk.rt}; end;
 for s = 1:numel(op.msk.rt)  %Check each element
     if iscell(op.msk.rt{s})     %Check if is cell (typical)
         if ischar(op.msk.rt{s}{1})  %Check if char names
@@ -125,15 +128,18 @@ if op.unmix
 end
 %   Validate if specifying SPECTRAX (multi-line) light source
 if any(strcmpi(ip.bkmd.exp.Light, {'SPECTRAX'}))  %IF a multi-line source
-    mln = {'ExVolt', 'ExLine', 'ExWL'};
-    exc = cellfun(@(x)iscell(ip.bkmd.exp.(x)), mln);
+    mln = {'ExVolt', 'ExLine', 'ExWL'};     %Multi-line parameters
+    exc = cellfun(@(x)iscell(ip.bkmd.exp.(x)), mln); %Check if cell
     if all(exc); exc = cellfun(@(x)cellfun(@(y)numel(y), ip.bkmd.exp.(x)),...
             mln, 'UniformOutput', false); else exc = {1,2,3}; end
     assert(isequal(exc{:}), 'IMAN:bkmdCheck', ['Validation failed. ',...
         'When specifying a multi-line light source (e.g. SPECTRAX), ',...
-        'ExVolt, ExLine and ExWL must all be cell array with the same ',...
+        'ExVolt, ExLine and ExWL must all be cell arrays with the same ',...
         'number of elements and the size of each entry must match among ',...
         'the three fields.']);
+else    %Ensure NOT cell encapsulated if not multi-line
+    if iscell(ip.bkmd.exp.ExVolt)
+        ip.bkmd.exp.ExVolt = [ip.bkmd.exp.ExVolt{:}]; end
 end
 % --- ---------------------------------------------------------------- ---
 

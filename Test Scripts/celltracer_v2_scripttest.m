@@ -102,7 +102,7 @@ fprintf('\nip.bkmd = \n\n');   display(ip.bkmd);
 op.cind     = 1:ip.indsz.c;    %Indices of Channels to process (names or indices)
 op.xypos    = [1,2,3,7,8];     %Indices of XY positions to process
 op.trng     = [2,6];       %Start and End indices of Time to process
-op.nW       = 4;        %Number of parallel workers to use
+op.nW       = 1;        %Number of parallel workers to use
 op.unmix    = false;  	%Linearly unmix color channel cross-talk
 op.fixshift = false;  	%Correct any indicated frameshifts
 %   Indicate which fields of bkmd should override any other MetaData source

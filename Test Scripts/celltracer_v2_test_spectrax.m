@@ -110,8 +110,10 @@ op.seg.chan = 'YFP';       %Color channel on which to segment
 op.seg.cyt  = true; 	%Segment on cytoplasmic signal
 %       The following defaults are typical of MCF10As at 20x magnification
 op.seg.maxD = 40;       %Maximum nuclear diameter (pixels)
-op.seg.minD = 12;       %Minimum nuclear diameter (pixels)op.seg.maxEcc = 0.7;    %Maximum eccentricity [0-1] (opposite of circularity)
-op.seg.minExtent = 0.5; %Minimum fraction of bounding box filled [0-PI/4]
+op.seg.minD = 12;       %Minimum nuclear diameter (pixels)
+op.seg.maxEcc = 0.9;    %Maximum eccentricity [0-1] (opposite of circularity)
+op.seg.Extent = [0.65, 0.85]; %Minimum fraction of bounding box filled 
+%   Extent range is [0-1], value for a cirlce is PI/4
 
 %       It is recommended to scale imaging for nuclei (segmentation
 %       targets) to be greater than 10 pixels in diameter.

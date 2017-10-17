@@ -54,8 +54,8 @@ md = extract_mdata(n, v, mdi);
 %   Check for cell-encapuslated main names, and free
 mn = {'obj', 'Desc'; 'cam', 'Desc'; 'exp', 'Light'; 'exp', 'MultiLaser'};
 for sn = 1:size(mn,1);
-    if iscell(md.(mn{s,1}).(mn{s,2}))
-        md.(mn{s,1}).(mn{s,2}) = cell2mat(md.(mn{s,1}).(mn{s,2})); 
+    if iscell(md.(mn{sn,1}).(mn{sn,2}))
+        md.(mn{sn,1}).(mn{sn,2}) = cell2mat(md.(mn{sn,1}).(mn{sn,2})); 
     end
 end
 
@@ -153,25 +153,18 @@ for s = 1:length(fn)
                                 mdi, bkin, [prnt,spc,fn{s}]);
     else
         %If not a structure, check / request values / return
-        if iscell(md.(fn{s}))
-            unpop = any(cellfun('isempty',md.(fn{s})));
-        else
-            unpop = isempty(md.(fn{s}));
+        if iscell(md.(fn{s}));  unpop = any(cellfun('isempty',md.(fn{s})));
+        else                    unpop = isempty(md.(fn{s}));
         end
         
         if unpop
-            %First check for data in the backup input
-            try %#ok<TRYNC>
-                md.(fn{s}) = bkin.(fn{s});
-                continue;
-                %If found, go to next loop
-            end
+            %First check for data in the backup input -if found, go to next
+            try md.(fn{s}) = bkin.(fn{s}); continue;  end  %#ok<TRYNC>
             %If First unpopulated field, print warning info
             if isfirstwarn
                 warning(['Unpopulated Metadata found. Enter values as ',...
                     'requested. Refer to "help nd2_meta" for field ',...
-                    'descriptions.']);
-                isfirstwarn = false;
+                    'descriptions.']);  isfirstwarn = false;
             end
             %   Get current value of bad field
             if mdi.([prnt,spc,fn{s}]){4}
