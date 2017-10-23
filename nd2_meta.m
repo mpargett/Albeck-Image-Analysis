@@ -167,7 +167,7 @@ for s = 1:length(fn)
                     'descriptions.']);  isfirstwarn = false;
             end
             %   Get current value of bad field
-            if mdi.([prnt,spc,fn{s}]){4}
+            if eval(['mdi.',[prnt,spc,fn{s}],'{4}'])
                 %Request input to fill field
                 md.(fn{s}) = input(['\nEnter value(s) for: ', prnt,'.',...
                     fn{s}, '\n    This field ','requires ', ...
