@@ -19,7 +19,7 @@ if strcmpi(tF,'version'); c = 'v2.0'; return; end
 %% Get track dimensions
 nT = max( arrayfun(@(x)x.seqOfEvents(end,1), tF) ); % # of Times
 nct = length( tF );     %Number of compound tracks
-ntk = arrayfun(@(x)size(x.seqOfEvents,1)./2, tF);   %# of Cells / compound
+ntk = arrayfun(@(x)size(x.seqOfEvents,1)./2, tF);   % # of Cells / compound
 nC = sum( ntk );        % # of Cells
 
 c = nan(nC, nT, 2);     %Initialize Coordinate matrix

@@ -144,14 +144,37 @@ end
 %Get MATLAB version for syntax selection
 vv = version;  vv = str2double(regexp(vv, '^\d*\.\d*', 'match'));
 
-%% INPUT PARSING AND CHECKING  -------------------------------------------
-%IF warnings are prohibited, disable
-if ~op.disp.warnings
-    warning('off', 'MATLAB:Java:DuplicateClass');
-    warning('off', 'IMAN:Celltrace');
-    warning('off', 'MATLAB:mat2cell:TrailingUnityVectorArgRemoved');
+%% PROCEDURE INITIALIZATION  ---------------------------------------------
+%PARALLEL PROCESSING SETUP
+%   Establish parallel processing environment (syntax depends on version)
+if op.nW > 1 && (  vv <  8.2 && matlabpool('size') == 0  || ...
+                vv >= 8.2 && isempty(gcp('nocreate'))    ) %#ok<*DPOOL>
+    %Start the local parallel pool
+    if vv < 8.2;  matlabpool('local', op.nW);  
+    else parpool('local', op.nW, 'IdleTimeout', Inf);  end
+    %Ensure availability of proper java classes from BioFormats
+    if iscell(op.pth.jc); runtext = ['javaclasspath({''',op.pth.jc{1}];
+        for s = 2:numel(op.pth.jc); runtext = [runtext,''',''',...
+                op.pth.jc{s}]; end;  runtext = [runtext,'''});']; %#ok<AGROW>
+    else runtext = ['javaclasspath ',op.pth.jc,';'];
+    end;     pctRunOnAll(runtext);
+end
+runid = ceil(rand*1e4);                     %Assign random run ID number
+
+%WARNING HANDLING:  IF warnings are prohibited, disable
+if ~op.disp.warnings  
+    %   List typical warnings (used again for each worker on parallel pool)
+    wid = {'MATLAB:Java:DuplicateClass','IMAN:Celltrace',...
+    'MATLAB:mat2cell:TrailingUnityVectorArgRemoved'};
+    if op.nW > 1;  widp = parallel.pool.Constant(wid);  %IF parallel
+        %   Copy warning IDs to pool and set 'off' on each worker
+        parfevalOnAll(@(x)cellfun(@(y)warning('off', y), x.Value), 0, widp);
+    else    for sw = 1:length(wid); warning('off', wid{sw}); end
+        %   ^Or else, just loop for the client
+    end
 end
 
+%SET SCALE AND ORDER OF OPERATIONS
 %Evaluate scale of processing
 nxy = numel(op.xypos);      %Number of XY positions to be run
 nc = numel(op.cind);        %Number of channels to be used
@@ -187,21 +210,6 @@ altXYi = NaN(1,nxy); altXYi(use_altXY) = xyrev([p.bkg(use_altXY).altxy]);
             ' itself properly defined.  Check background structure (bkg)',...     
             ' for XY(s) ', num2str(op.xypos(~bkvalid)),'.']);
     end
-
-%Establish parallel processing environment (syntax depends on version)
-if op.nW > 1 && (  vv <  8.2 && matlabpool('size') == 0  || ...
-                vv >= 8.2 && isempty(gcp('nocreate'))    ) %#ok<*DPOOL>
-    %Start the local parallel pool
-    if vv < 8.2;  matlabpool('local', op.nW);  
-    else parpool('local', op.nW, 'IdleTimeout', Inf);  end
-    %Ensure availability of proper java classes from BioFormats
-    if iscell(op.pth.jc); runtext = ['javaclasspath({''',op.pth.jc{1}];
-        for s = 2:numel(op.pth.jc); runtext = [runtext,''',''',...
-                op.pth.jc{s}]; end;  runtext = [runtext,'''});']; %#ok<AGROW>
-    else runtext = ['javaclasspath ',op.pth.jc,';'];
-    end;     pctRunOnAll(runtext);
-end
-runid = ceil(rand*1e4);                     %Assign random run ID number
 
 
 %% DATA PREPARATION  -----------------------------------------------------
