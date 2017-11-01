@@ -166,9 +166,10 @@ if ~op.disp.warnings
     %   List typical warnings (used again for each worker on parallel pool)
     wid = {'MATLAB:Java:DuplicateClass','IMAN:Celltrace',...
     'MATLAB:mat2cell:TrailingUnityVectorArgRemoved'};
-    if op.nW > 1;  widp = parallel.pool.Constant(wid);  %IF parallel
-        %   Copy warning IDs to pool and set 'off' on each worker
-        parfevalOnAll(@(x)cellfun(@(y)warning('off', y), x.Value), 0, widp);
+    if op.nW > 1;  %IF parallel, turn off on all workers
+        for s = 1:length(wid)
+            pctRunOnAll(['warning(''off'', ''',wid{s},''');']);
+        end
     else    for sw = 1:length(wid); warning('off', wid{sw}); end
         %   ^Or else, just loop for the client
     end
