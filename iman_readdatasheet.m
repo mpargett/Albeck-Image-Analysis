@@ -321,7 +321,7 @@ for sw = 1:numel(tmp)
             y = regexpi(tmp{sw}, ['^\s*(?<pfx>[^\d@]*)\s*',... %Prefix
                 '(?<cv>[\d\.]*)\s*',...             %Conc. value
                 '(?<cu>(?(cv)',uu,'))\s*',...       %Conc. units
-                '(?<nm>(?(cv)[^\s\d@]*))[^a-zA-Z@]*',...           %Tx Name
+                '(?<nm>(?(cv)[^@]*))',...           %Tx Name
                 '(@?)\s*(?<tv>(?(5)[\d\.]*))',...   %Timing value (if @)
                 '\s*(?<tu>(?(tv)',uu,'?))'], 'names');       %Timing units
             for s = 1:numel(y)
