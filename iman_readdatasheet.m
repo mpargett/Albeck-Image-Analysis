@@ -359,7 +359,7 @@ end
 function [u, tu, cu, du] = defineunits(pfn)
 %List units by type (use regexp notation as convenient)
 time_units = {'d', 'h', 'm', 's', 'tp'};
-conc_units = {'[fpnum]?g/[umcd]?l', '[fpnum]M', '%'};
+conc_units = {'[fpnum]?g(/[umcd]?l)?', '[fpnum]M', '%'};
 dens_units = {'c(ells?)?/w(ell)?', 'c(ells?)?/[um]l'};
 
 %Time only
