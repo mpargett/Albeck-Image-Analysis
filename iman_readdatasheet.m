@@ -107,14 +107,14 @@ for s = 1:numel(hdi)
 end
 
 %Get valid plate range from XY
-r96 = {1:8, 2:13};  rtmp = r(ph.xy + r96{1}, r96{2});
-vpr = ~cellfun( @isempty, r(ph.xy + r96{1}, r96{2}) );
+pr = {1:8, 2:13};  rtmp = r(ph.xy + pr{1}, pr{2});
+vpr = ~cellfun( @isempty, r(ph.xy + pr{1}, pr{2}) );
 %   Remove any entries with only space characters
     strchk = vpr & cellfun(@ischar,rtmp);
     vpr(strchk) = ~cellfun(@isempty, regexpi(rtmp(strchk), '\S'));
 %Identify size of plate
 p24 = false(size(vpr));     p24(1:4,1:6) = true;
-if ~any(vpr(~p24));     vpr = pvr(p24);     end
+if ~any(vpr(~p24));  vpr = reshape(vpr(p24),4,6);  pr = {1:4, 2:7};   end
 p0 = cell(size(vpr));   pnan = nan(size(vpr));
 
 %Pre-allocate plate metadata structure
@@ -125,7 +125,7 @@ pmd.src = regexpi(f, '(?<path>^.*\\)?(?<fname>[^\\]*$)', 'names');
 %Assign metadata for each field
 %   Assign unit type for each field
 for s = 1:numel(pfn)
-    tmp = cellfun(@num2str, r(ph.(pfn{s}) + r96{1}, r96{2}), ...
+    tmp = cellfun(@num2str, r(ph.(pfn{s}) + pr{1}, pr{2}), ...
         'UniformOutput', false);
     pmd.(pfn{s})(vpr) = eparse(tmp(vpr), pfn{s}, ut{s});
     
@@ -243,16 +243,22 @@ for s = 1:numel(txn);
     %Fill all values for each treatment 
     for ss = 1:numel(udn)
         %   Get well indices with matching name
-        wi = strcmp(udn{ss},dn);
+        wi = strcmp(udn{ss},dn);  nwi = nnz(wi);
         %   List xys with that name
         idx.(txn{s}).(udn{ss}).xy = [pmd.xy{any(wi,3)}];  
+        %   Get mapping of xys in wells
+        xym = cellfun(@(x,y)ones(1,numel(x)).*y, pmd.xy(any(wi,3)), ...
+            num2cell(1:nwi)', 'Un', 0);     xym = [xym{:}];
         %Convert any doses or times with different units to minimum unit
         %   List dose (same order) and State dose unit
         [idx.(txn{s}).(udn{ss}).dose, idx.(txn{s}).(udn{ss}).dunit] = ...
-            simplify_units(dsv(wi), dun(wi));  
+            simplify_units(dsv(wi), dun(wi));
         %   List times (same order) and State time unit
         [idx.(txn{s}).(udn{ss}).time, idx.(txn{s}).(udn{ss}).tunit] = ...
             simplify_units(tmv(wi), tun(wi));
+        %   Apply xy-mapping for xy-oriented list of values
+        idx.(txn{s}).(udn{ss}).dose = idx.(txn{s}).(udn{ss}).dose(xym)';
+        idx.(txn{s}).(udn{ss}).time = idx.(txn{s}).(udn{ss}).time(xym)';
     end
 end
 
