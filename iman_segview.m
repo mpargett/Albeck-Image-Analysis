@@ -122,7 +122,7 @@ nt = numel(p.trange);
 %   Pre-define structuring element for dilation
 st2 = strel('disk',2);
 %   Pre-generate number images for IDs
-if p.printid; n = pixnums(p.idsize); end
+if p.printid; n = pixnums(p.idsize);  else n = {}; end %Shenanigans
 
 %Check and initialize for Parallel Processing
 if p.nw > 1;  nper = pp_init(p, nt, pth);  else nper = nt;  end
