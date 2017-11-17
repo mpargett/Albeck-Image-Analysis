@@ -81,8 +81,8 @@ ip.xyshift.shifttype = 'translation';  %Type of shift to perform
     %       (only needed for pixel-by-pixel spectral unmixing of FRET)
     ip.bkmd.exp.FRET       =   {};% struct('EKAR', {{'CFP','YFP'}}); % {[1,2]}
     ip.bkmd.exp.Light      =   'SOLA';           %Light source name ++
-    ip.bkmd.exp.Exposure   =   [0, 0, 0];  %Exposure times (ms) ++
-    ip.bkmd.exp.ExVolt     =   [0, 0, 0];     %Relative voltage (0-100) ++
+    ip.bkmd.exp.Exposure   =   {0, 0, 0};  %Exposure times (ms) ++
+    ip.bkmd.exp.ExVolt     =   {0, 0, 0};     %Relative voltage (0-100) ++
     %   IF using the SPECTRAX light source, also define the following:
 %     ip.bkmd.exp.ExLine     =   {[],[],[]};   %Excitation line
 %     ip.bkmd.exp.ExWL       =   {[],[],[]};   %Wavelength
