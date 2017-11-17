@@ -39,13 +39,11 @@ if strcmpi(im,'version'); movieInfo = 'v2.1'; return; end
 %Default parameters
 p = struct('chan', 1, 'cyt', false, 'minD', 8, 'maxD', 25, ...
            'maxEcc', 0.9, 'Extent', [0.65,0.9], 'sigthresh', [], ...
-           'hardsnr', false, 'nth', 20);
+           'hardsnr', false, 'nth', 20, 'nrode', 0);
 
 %Apply provided parameters
 for s = fieldnames(pin)'; 	p.(s{1}) = pin.(s{1});  end
 
-erode_grad = 0;%Erosion depth for gradients (cyto segment)
-    %Was floor(p.minD./4); But this method is depricated - too small nuclei
 bkg_rat = 0.5;          %Min foreground to background ratio (~SNR-1)
 %   Get image background intensity
 if ~isempty(bkg); stim_bkg = bkg(p.chan); else stim_bkg = 0; end
@@ -58,8 +56,8 @@ end
 
 %% Preliminary calculations
 %Calculations used for cell sizing
-maxNucArea = round(pi*p.maxD^2/4);
-minNucArea = round(pi*p.minD^2/4);
+maxNucArea = round( (pi*(p.maxD - p.nrode*2)^2)/4 );
+minNucArea = round( (pi*(p.minD - p.nrode*2)^2)/4 );
 flts = max(1,floor(p.maxD/10));   %Filter size, based on expected nucleus size
 
 %Define a Gaussian filter (smoothes noise)
@@ -70,7 +68,9 @@ stim = double( imfilter(im(:,:,p.chan), gaussianFilter, 'replicate') );
 %Set 'foreground' region based on background levels (previously removed)
 stim_fore = stim > stim_bkg.*(bkg_rat);   %Foreground area mask
 %Define binary structuring elements
-st1 = strel('disk', ceil(flts/4));  st2 = strel('disk', 2*ceil(flts/4));
+morphflt = ceil(flts/4);
+st1 = strel('disk', morphflt);  
+st2 = strel('disk', 2*morphflt + p.nrode);
 
 
 %% Image filtering (IF necessary, i.e. using edge filters for cyto)
@@ -104,8 +104,7 @@ for s = 1:length(thresholds)
     
     %Dilate and erode to eliminate salt-and-pepper noise in binary
     tim = imdilate(tim, st1); %Dilate (remove holes)
-    tim = imerode(tim, st2);  %Erode (remove spots)
-    tim = imdilate(tim, st1); %Redilate (restore size)
+    tim = imerode(tim, st2);  %Erode (remove spots, shrink if p.nrode)
     
     %Get properties of each region in image (Area, Perimeter, ...)
     S = regionprops(tim, 'Area', 'Eccentricity', ...
@@ -130,12 +129,9 @@ for s = 1:length(thresholds)
 
 end
 
-%Erode further if a cytoplasmic segmentation
-%   Gradients in cyto view tend to overestimate the nucleus
-%   Erode depth scaled by minimum nuc diameter (prevent overerosion)
-if p.cyt && erode_grad > 0 
-    enuc = imerode(enuc, strel( 'disk', erode_grad ));    
-end
+%Restore nuclear size from hole removal 
+%   (does not restore full size if p.nrode > 0)
+enuc = imdilate(enuc, st1);
 
 
 %% Store estimated nuclei data

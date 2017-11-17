@@ -129,6 +129,9 @@ op.seg.sigthresh = []; %[Optional] Minimum intensity of 'good' signal
 %   If you use sigthresh, pre-subtract any camera baseline
 op.seg.hardsnr = false;  %Typically kept to FALSE.  TRUE makes the signal 
 %   threshold 'hard', enforcing cutoff of any pixels below it.
+op.seg.nrode = 0;   %[Optional] Approx. number of pixels to erode nuc mask
+%   NOTE: op.seg.nrode is only to improved nearby cell separation - it is
+%   undone in final masks.  Use op.msk.nrode to adjust final masks.
 
 %    Masking settings
 op.msk.rt = {};             %Pre-averaging channel ratios to take {{'',''}}
@@ -140,6 +143,9 @@ op.msk.saverawvals = true;  %Save all raw valcube entries (pre-tracking)
 %           op.msk.aggfun.chan = {'CNAME1', 'CNAME2', ...};
 %           op.msk.aggfun.loc = {'Nuc','Cyt'};
 %           op.msk.aggfun.fun = @var;
+op.msk.nrode = 0;   %[Optional] Approx. # pixels to erode final nuc mask
+op.msk.cgap = 0;    %[Optional] Approx. # pixels to expand nuc-cyt mask gap
+op.msk.cwidth = 0;  %[Optional] Approx. # pixels to expand cyto ring width
 
 % Tracking settings (for utrack)
 op.trk.movrad = 25;     % Radius (in um) to consider for cell movement
