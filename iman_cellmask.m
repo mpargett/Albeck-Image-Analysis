@@ -48,10 +48,19 @@ if strcmpi(imin,'version'); valcube = 'v2.2'; return; end
 %% Operation parameters
 ncgap  = round((0.05*op.seg.maxD)) + 2;  %Size of gap between nuc mask and cyto
 ncring = round((0.05*op.seg.maxD)) + 1;  %Desired cyto mask thickness
-if isfield(op.msk, 'cytadj');   %IF masking adjustments provided, apply
-    ncgap = ncgap + op.msk.cytadj;  ncring = ncring + op.msk.cytadj; end
+
+%IF masking adjustments provided, apply (allowing backward compatibility)
+%   Nuclear Mask re-dilation from segmentation erosion
+if isfield(op.seg, 'nrode'); nrode = op.seg.nrode; else nrode = 0; end
+%   Nuclear Mask erosion
+if isfield(op.msk, 'nrode'); nrode = nrode - op.msk.nrode;  end
+%   Nuc-Cyto Mask gap
+if isfield(op.msk, 'cgap');  ncgap = ncgap + op.msk.cgap;   end
+%   Cytoplasm Mask ring width
+if isfield(op.msk, 'cwidth');  ncring = ncring + op.msk.cwidth;   end
+
 ncexpand = ncgap + ncring;  %Size to expand nuclear mask for cyto
-outpct = [20,80];                   %Percentiles to reject for outliers
+outpct = [20,80];          	%Percentiles to reject for outliers
 
 %Identify input data size
 if numel(imin) < 10;    sz = imin;  else    sz = size(imin);    end
@@ -137,6 +146,12 @@ nuclm = bwlabel(nmasks);
 lbl = nuclm( sub2ind(sz, round(m.yCoord), round(m.xCoord)) );
 nnuc = numel(lbl);  %Number of segmented coordinates
 
+%If nuclear masks were eroded in processing, re-dilate, accomodating
+%   desired extra erosion in final masks (op.msk.nrode)
+%   (Performed here, on label matrices, preserves cell identity)
+if      nrode > 0; 	nuclm = imdilate(nuclm, strel('disk', nerode)); 
+elseif  nrode < 0; 	nuclm = imerode(nuclm, strel('disk', -nerode)); 
+end
 
 %% Extend to cytoplasm masks
 %Thicken nuclear region (to make a donut for cytoplasm)
