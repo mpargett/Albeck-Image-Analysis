@@ -149,8 +149,8 @@ nnuc = numel(lbl);  %Number of segmented coordinates
 %If nuclear masks were eroded in processing, re-dilate, accomodating
 %   desired extra erosion in final masks (op.msk.nrode)
 %   (Performed here, on label matrices, preserves cell identity)
-if      nrode > 0; 	nuclm = imdilate(nuclm, strel('disk', nerode)); 
-elseif  nrode < 0; 	nuclm = imerode(nuclm, strel('disk', -nerode)); 
+if      nrode > 0; 	nuclm = imdilate(nuclm, strel('disk', nrode)); 
+elseif  nrode < 0; 	nuclm = imerode(nuclm, strel('disk', -nrode)); 
 end
 
 %% Extend to cytoplasm masks
