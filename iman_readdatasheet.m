@@ -115,7 +115,7 @@ vpr = ~cellfun( @isempty, r(ph.xy + pr{1}, pr{2}) );
 %Identify size of plate
 p24 = false(size(vpr));     p24(1:4,1:6) = true;
 if ~any(vpr(~p24));  vpr = reshape(vpr(p24),4,6);  pr = {1:4, 2:7};   end
-p0 = cell(size(vpr));   pnan = nan(size(vpr));
+p0 = cell(size(vpr));
 
 %Pre-allocate plate metadata structure
 pmd = cell2struct([{[]};repmat({p0},numel(pfn),1)], [{'src'};pfn], 1);
@@ -228,12 +228,12 @@ txn = pfn( ~cellfun(@isempty,regexpi(pfn, '.*tx.*')) );
 for s = 1:numel(txn);
     %Make unique list of tx (drug) names in this Tx
     %   Get indices for drug names (may be multiple), and get names
-    di = [1,1+1:5:size(pmd.(txn{s}),3)];    dn = pmd.(txn{s})(:,:,di);
+    di = 1:5:size(pmd.(txn{s}),3);    dn = pmd.(txn{s})(:,:,di);
     %   Parse dosing and timing for each name set
-    dsv = cat(3,pnan,str2double( pmd.(txn{s})(:,:,di(2:end)+1) ));
-    dun = cat(3,p0,pmd.(txn{s})(:,:,di(2:end)+2));
-    tmv = cat(3,pnan,str2double( pmd.(txn{s})(:,:,di(2:end)+3) ));
-    tun = cat(3,p0,pmd.(txn{s})(:,:,di(2:end)+4));
+    dsv = cat(3,str2double( pmd.(txn{s})(:,:,di+1) ));
+    dun = cat(3,pmd.(txn{s})(:,:,di+2));
+    tmv = cat(3,str2double( pmd.(txn{s})(:,:,di+3) ));
+    tun = cat(3,pmd.(txn{s})(:,:,di+4));
     %   Remove NaNs
     bi = cellfun(@(x)any(isnan(x)), dn);   [dn{bi}] = deal('');
     %   Make names proper for fields
@@ -334,10 +334,9 @@ for sw = 1:numel(tmp)
                 if ~isfield(y{s},'tv'); %Fill missing time fields
                     [y{s}.tv] = deal(''); [y{s}.tu] = deal(''); end
                 if isempty(y{s})  %Pack empties with spacing (bad data)
-                    out{sw}{s} = [tmp{sw}, cell(1,5)]; continue; end  
+                    out{sw}{s} = [tmp{sw}, cell(1,4)]; continue; end  
                 %   Determine if names are in nm or pfx
-                if isempty(y{s}(end).nm) && ...
-                    (~isempty(y{s}(end).cv) || ~isempty(y{s}(end).tv))
+                if isempty(y{s}(end).nm) && ~isempty(y{s}(end).pfx)
                     nm1st = true;       else nm1st = false; 
                 end
                 for sy = 1:numel(y{s})
@@ -347,9 +346,6 @@ for sw = 1:numel(tmp)
                     out{sw}{s}(si+(1:4)) = {y{s}(sy).cv, y{s}(sy).cu,...
                         y{s}(sy).tv, y{s}(sy).tu};
                 end
-                %   Prepend prefix, if valid
-                if ~nm1st; out{sw}{s} = [{y{s}(1).pfx}, out{sw}{s}]; 
-                else out{sw}{s} = [{''}, out{sw}{s}]; end
             end
             out{sw} = [out{sw}{:}]; %Cat 's' layer
     end
