@@ -34,7 +34,10 @@ if numel(lsn) > 1 && isfield(MD.exp, 'ExLine') && ~isempty(MD.exp.ExLine)
     is_multiline = true;
     %Double check MetaData format
     if ~iscell(MD.exp.ExVolt); MD.exp.ExVolt = num2cell(MD.exp.ExVolt); end
-else is_multiline = false;  lsp = lsPower.(lsn{1}).spec;
+else %IF single line, store spectrum and ensure numeric array MD
+    is_multiline = false;  lsp = lsPower.(lsn{1}).spec;
+    if iscell(MD.exp.ExVolt); MD.exp.ExVolt = [MD.exp.ExVolt{:}]; end
+    if iscell(MD.exp.Exposure); MD.exp.Exposure = [MD.exp.Exposure{:}]; end
 end
 
 %Get camera QE (quantum efficiency) curve
@@ -53,17 +56,14 @@ for s = 1:2
         for ss = 1:numel(cln) %Each Line can be scaled differently
             lsp = lsp + lsPower.(lsn{cln(ss)}).spec .* MD.exp.ExVolt{id}(ss); 
         end
-%         lsp = lsp ./ lsPower.WaveLength;  %Adjust for Photons/time
-    % TEG 01/18/2017 : MD.exp.ExVolt(id) --> MD.exp.ExVolt{id}
-    else exv = MD.exp.ExVolt{id}; %IF single Line, voltage is a vector
+    else exv = MD.exp.ExVolt(id); %IF single Line, voltage is a vector
     end
     
     %Define relevant filter and fluorophore spectra
     fp = SP.(MD.exp.FPhore{id});  ft = SP.(MD.exp.Filter{id});
     %Calculate relative intesity gain
-    % TEG 01/17/2017:  MD.exp.Exposure(id) --> MD.exp.Exposure{id}
     rig(s) = sum( lsp .* ft.ex .* fp.ab ) * sum( ft.em .* fp.em .* QEcam ) ...
-        * fp.mec * fp.QY * MD.exp.Exposure{id} * exv / sum(fp.em);
+        * fp.mec * fp.QY * MD.exp.Exposure(id) * exv / sum(fp.em);
 end
 
 %Take ratio of RIG to get Power Ratio (e.g. Donor to Acceptor in FRET pair)
