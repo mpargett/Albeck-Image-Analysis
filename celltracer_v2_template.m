@@ -172,8 +172,17 @@ op.msk.fret = ip.bkmd.exp.FRET;     %Copy FRET channel names to op
 %Pre-Run validation
 [ip, op] = celltracer_v2_partner('validate', ip, op);
 
-%Main procedure
-[dao, GMD, dmx] = iman_celltracer(ip, op);
+%Optional segmentation check
+%   Run the following commented function to view segmentation based on
+%   current parameters.  Type help iman_segcheck for more details.  op
+%   settings can then be adjusted and iman_segcheck rerun to test. Do not
+%   reset pst to empty - it is needed to avoid reloading of the dataset.
+% pst = [];
+% pst = iman_segcheck(ip, op, 't',1, 'xy',1, 'pastinfo',pst);
+
+
+%% Main procedure
+[dao, GMD, dmx] = iman_celltracer(ip, op);f
 
 
 
