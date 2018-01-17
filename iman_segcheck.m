@@ -24,12 +24,14 @@
 %   nclr        - Color of nuclear masks, RGB triplet
 %   cclr        - Color of cytoplasm masks, RGB triplet
 %   pastinfo    - Data Access info for future calls on the same dataset
+%   imthresh    - Image percentile threshold for display (default 95)
 
 function [imd] = iman_segcheck(ip,op,varargin)
 %% Handle options
 p.nclr = [0,0,1];
 p.cclr = [0,1,0.5];
 p.pastinfo = [];
+p.imthresh = 95;
 p.t  = 1;
 p.c  = op.seg.chan;
 p.xy = 1;
@@ -63,18 +65,20 @@ end
 [im, e_inv] = iman_refine(im, imd.GMD, ip.bval, op.objbias);
 
 %% Handle background
-txyz = [p.t, p.xy, p.z];  %By default, point to this image
+bkxy = find(op.xypos == p.xy);
+txyz = [p.t, bkxy, p.z];  %By default, point to this image
 %   If alternate XY indicated, use it
-if ~isempty(ip.bkg(p.xy).altxy);  txyz(2) = ip.bkg(p.xy).altxy;     end
+if ~isempty(ip.bkg(bkxy).altxy);
+    txyz(2) = find(op.xypos == ip.bkg(bkxy).altxy);     end
 %   If not dynamic, use time point 1
-if ~ip.bkg(p.xy).dyn;             txyz(1) = 1;	end
+if ~ip.bkg(txyz(2)).dyn;             txyz(1) = 1;	end
 
 %IF this XY not yet accessed for background, pre-allocate w/ NaN
 if isempty(imd.bkg{txyz(2)});    imd.bkg{txyz(2)} = ...
         nan(1 + ip.bkg(txyz(2)).fix.*(ip.indsz.t-1), ip.indsz.c);   end
 %Check if this background was already collected
 if any(isnan(imd.bkg{txyz(2)}(txyz(1),:)))  %IF not collected, do so now
-    if ip.bkg(p.xy).fix;  bkg(p.t,:) = ip.bkg(p.xy).reg;  %IF fixed, apply
+    if ip.bkg(txyz(2)).fix;  bkg(p.t,:) = ip.bkg(txyz(2)).reg;  %IF fixed, apply
     else 	bkg(p.t,:) = get_bkg(imd, ip, txyz, e_inv);  %ELSE get values
     end;    imd.bkg{txyz(2)}(txyz(1),:) = bkg;
 else bkg = imd.bkg{txyz(2)}(txyz(1),:);	%IF already collected, use old
@@ -90,8 +94,8 @@ op.seg.minD = op.seg.minD./pxscl;  op.seg.maxD = op.seg.maxD./pxscl;
 
 %Display
 for s = p.c(:)'
-    imm = iman_maskoverlay(im(:,:,s)-bkg(s),mask.nuc,p.nclr,3);
-    imm = iman_maskoverlay(imm,mask.cyt,p.cclr,2); 
+    imm = iman_maskoverlay(im(:,:,s)-bkg(s),mask.nuc,p.nclr,3, p.imthresh);
+    imm = iman_maskoverlay(imm,mask.cyt,p.cclr,2, p.imthresh); 
     figure; imshow(imm); 
     title(['XY:', num2str(p.xy),' C:', num2str(s), ' T:', num2str(p.t)]);
 end

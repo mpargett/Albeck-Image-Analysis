@@ -1,9 +1,9 @@
 %MaskOverlay
 
-function im = iman_maskoverlay(im,msk,mcolor,sz)
+function im = iman_maskoverlay(im,msk,mcolor,sz,imth)
 %Replicate grayscale to RGB
 if size(im,3) == 1
-    im = im./prctile(im(:),99.5); %Scale for visisbility
+    im = im./prctile(im(:),imth); %Scale for visisbility
     im = repmat(im,1,1,3); 
 end
 
