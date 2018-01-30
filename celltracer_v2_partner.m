@@ -79,7 +79,6 @@ assert( max(op.cind) <= ip.indsz.c && max(op.xypos) <= ip.indsz.xy && ...
 % --- ---------------------------------------------------------------- ---
 
 % --- Background review ---
-ip.bkg = ip.bkg(op.xypos);   	%Restrict background to XYs used
 %Assert proper sizes of background region definitions
 bkc = arrayfun(@(x)~isempty(x.altxy) || (x.fix && numel(x.reg) == ip.indsz.c) || ...
     (numel(x.reg) == 4 && x.reg(1)<x.reg(2) && x.reg(3)<x.reg(4)), ip.bkg);
@@ -233,9 +232,9 @@ elseif isempty(cin) || ~isnumeric(cin)
     error(['IMAN:',ctype,'ChanCheck'], ['Validation failed. ',ctype,...
         ' channel must be numeric or a string.']);
 end
-%   Remap channel to reduced indices, as needed
+%   Check remapping of channel to reduced indices, as needed
 if exist('cmap', 'var')
-    [chk,cin] = ismember(cin, cmap);
+    [chk] = ismember(cin, cmap);
     assert(all(chk), ['IMAN:',ctype,'ChanCheck'], ['Validation ',...
         'failed. ',ctype,' channel index not found within selected ',...
         'channel indices. Verify name or index provided against ',...

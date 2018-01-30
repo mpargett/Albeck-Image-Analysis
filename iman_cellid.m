@@ -12,6 +12,9 @@
 %   The op structure may contain the following field:
 %       chan        -Index of the channel to use for segmentation
 %       cyt         -Logical - TRUE if segmentation channel is cytosolic
+%       usegrad     -Logical - TRUE to use gradients (depricated, for
+%                    cytoplasmic images, consider localscale)
+%       localscale  -Logical - TRUE to scale by local intensity
 %       minD        -Minimum Diameter of acceptable nucleus shapes (pixels)
 %       maxD        -Maximum Diameter of acceptable nucleus shapes (pixels)
 %       maxEcc      -Maximum Eccentricity of acceptable nucleus shapes
@@ -39,7 +42,8 @@ if strcmpi(im,'version'); movieInfo = 'v2.1'; return; end
 %Default parameters
 p = struct('chan', 1, 'cyt', false, 'minD', 8, 'maxD', 25, ...
            'maxEcc', 0.9, 'Extent', [0.65,0.9], 'sigthresh', [], ...
-           'hardsnr', false, 'nth', 20, 'nrode', 0);
+           'hardsnr', false, 'nth', 20, 'nrode', 0, ...
+           'localscale', false, 'usegrad', false);
 
 %Apply provided parameters
 for s = fieldnames(pin)'; 	p.(s{1}) = pin.(s{1});  end
@@ -60,11 +64,13 @@ maxNucArea = round( (pi*(p.maxD - p.nrode*2)^2)/4 );
 minNucArea = round( (pi*(p.minD - p.nrode*2)^2)/4 );
 flts = max(1,floor(p.maxD/10));   %Filter size, based on expected nucleus size
 
-%Define a Gaussian filter (smoothes noise)
-gaussianFilter = fspecial('gaussian', flts.*[1, 1], flts/2);
-%Filter only the target segmentation channel
+%Prefiltering now depricated 2018-01-18
+    %Define a Gaussian filter (smoothes noise)
+    %gaussianFilter = fspecial('gaussian', flts.*[1, 1], flts/2);
+    %Filter only the target segmentation channel
+    % stim = double( imfilter(im(:,:,p.chan), gaussianFilter, 'replicate') );
 %   All further operations consider this segmentation target image (stim)
-stim = double( imfilter(im(:,:,p.chan), gaussianFilter, 'replicate') );
+stim = double( im(:,:,p.chan) );
 %Set 'foreground' region based on background levels (previously removed)
 stim_fore = stim > stim_bkg.*(bkg_rat);   %Foreground area mask
 %Define binary structuring elements
@@ -74,19 +80,34 @@ st2 = strel('disk', 2*morphflt + p.nrode);
 
 
 %% Image filtering (IF necessary, i.e. using edge filters for cyto)
-if p.cyt
-    %   Filter out background by setting it to uniform level
-    stim(~stim_fore) = stim_bkg.*(bkg_rat);
-    tstim = stim;       %Temporary copy of original image
-    %Create a predefined 2d filter. "Sobel edge-emphasizing filter"
-    hy = fspecial('sobel');   hx = hy';
-    %Filter image for edges (gradients, via the Sobel filter)
-    stim = sqrt(imfilter(stim, hx, 'replicate').^2 ...  %Across x axis.
-             + imfilter(stim, hy, 'replicate').^2);     %Across y axis.
-    %Invert to make gradients 'low', and subtract original image (penalizes
-    %   regions with high intensity, so bright spot are not kept)
-    stim = max(stim(:)) - stim - tstim;     clear tstim;
+%Gradient filtering only if requested - 2018-01-18
+if p.usegrad
+        %   Filter out background by setting it to uniform level
+        stim(~stim_fore) = stim_bkg.*(bkg_rat);
+        %Create a predefined 2d filter. "Sobel edge-emphasizing filter"
+        hy = fspecial('sobel');   hx = hy';
+        %Filter image for edges (gradients, via the Sobel filter)
+        tstim = sqrt(imfilter(stim, hx, 'replicate').^2 ...  %Across x axis.
+            + imfilter(stim, hy, 'replicate').^2);     %Across y axis.
+        %   Add image to gradients (penalizes 'high' regions for cyto)
+        tstim = stim + tstim;
+    else    tstim = stim;  %Otherwise, just use image
 end
+
+%Cytoplasmic segmentation inverts the image (after scaling if req'd)
+if p.cyt 
+    %   IF using local scaling, dilate to overlap nucleus and scale
+    if p.localscale
+        stl = strel('disk',floor(p.maxD./2));
+        tstim = tstim ./ imerode(imdilate(stim,stl),stl); 
+    end    
+    %Invert to make image/gradients 'low'
+    stim = max(tstim(:)) - tstim;
+else %IF nuclear segmentation, perform scaling very locally
+    if p.localscale; stim = tstim ./ imdilate(stim,st2); end
+    stim(~stim_fore) = 0;   %Neglect non-foreground aggresively
+end;    clear tstim;
+
 
 %% Image thresholding search
 %Define thresholds at linearly spaced quantiles

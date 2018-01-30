@@ -65,11 +65,9 @@ end
 [im, e_inv] = iman_refine(im, imd.GMD, ip.bval, op.objbias);
 
 %% Handle background
-bkxy = find(op.xypos == p.xy);
-txyz = [p.t, bkxy, p.z];  %By default, point to this image
+txyz = [p.t, p.xy, p.z];  %By default, point to this image
 %   If alternate XY indicated, use it
-if ~isempty(ip.bkg(bkxy).altxy);
-    txyz(2) = find(op.xypos == ip.bkg(bkxy).altxy);     end
+if ~isempty(ip.bkg(txyz(2)).altxy);  txyz(2) = ip.bkg(txyz(2)).altxy; end
 %   If not dynamic, use time point 1
 if ~ip.bkg(txyz(2)).dyn;             txyz(1) = 1;	end
 

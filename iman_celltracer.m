@@ -180,21 +180,28 @@ end
 nxy = numel(op.xypos);      %Number of XY positions to be run
 nc = numel(op.cind);        %Number of channels to be used
 sz = 1;                     %Z-STACKS NOT DEFINED FOR THIS PROCEDURE
+%   Remap channel ids to requested range
+op.seg.chan = remapid(op.seg.chan, op.cind);
+op.msk.aggfun.chan = remapid(op.msk.aggfun.chan, op.cind);
+for sm = 1:length(op.msk.rt); 
+    for sr = 1:length(op.msk.rt{sm}); 
+        op.msk.rt{sm}{sr} = remapid(op.msk.rt{sm}{sr}, op.cind); 
+    end
+end
+
 %Check number of time points requested
 if      isempty(op.trng);  allt = true;    op.trng = 1;
 else    allt = false;   nT = op.trng(end) - op.trng(1) + 1;
 end
 
 %Check on background information provided
-nbk   = numel(p.bkg);
-if nbk > nxy; p.bkg = p.bkg(1:nxy);
-    warning('IMAN:Celltrace', ['Extra background information found: ',...
-        'numel(bkg) > numel(xypos). Removing last ',num2str(nbk - nxy),...
-        ' element(s) from bkg.']);
-elseif nbk < nxy; error(['Fewer backgrounds provided than XY positions.',...
-        ' The background structure (bkg) must contain an element for ',...
-        'each XY position to be used.']);
+if numel(p.bkg) < max(op.xypos); error(['Fewer backgrounds provided than max XY',...
+        ' position requested. The background structure (bkg) must contain',...
+        ' an element for each XY position to be used.']);
 end
+%   Restrict backgrounds to operation XYs
+p.bkg = p.bkg(op.xypos);
+
 
 %Establish processing order (to accommodate alernate background refs)
     %Set indices to re-order run when some XYs depend on others' background
@@ -658,3 +665,5 @@ end
 
 end
 
+%Subfunction to remap IDs
+function id = remapid(id,map);  id = find(id == map);  end
