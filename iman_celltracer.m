@@ -180,14 +180,6 @@ end
 nxy = numel(op.xypos);      %Number of XY positions to be run
 nc = numel(op.cind);        %Number of channels to be used
 sz = 1;                     %Z-STACKS NOT DEFINED FOR THIS PROCEDURE
-%   Remap channel ids to requested range
-op.seg.chan = remapid(op.seg.chan, op.cind);
-op.msk.aggfun.chan = remapid(op.msk.aggfun.chan, op.cind);
-for sm = 1:length(op.msk.rt); 
-    for sr = 1:length(op.msk.rt{sm}); 
-        op.msk.rt{sm}{sr} = remapid(op.msk.rt{sm}{sr}, op.cind); 
-    end
-end
 
 %Check number of time points requested
 if      isempty(op.trng);  allt = true;    op.trng = 1;
@@ -199,9 +191,52 @@ if numel(p.bkg) < max(op.xypos); error(['Fewer backgrounds provided than max XY'
         ' position requested. The background structure (bkg) must contain',...
         ' an element for each XY position to be used.']);
 end
+
+
+%% DATA PREPARATION  -----------------------------------------------------
+%Establish Data Access (e.g. BioFormats Reader for ND2 files)
+msg = sprintf(['Loading Data Access Object (DAO). ',...
+    'Start time is: ', datestr(now, 'mm/dd HH:MM PM')]);    disp(msg);
+dao = iman_imageaccess(p.fname, p.indsz);   isTS = dao.info.ThreadSafe; 
+if ~isTS; warning('off', 'MATLAB:Java:ConvertFromOpaque'); end
+msg = sprintf(['DAO loaded. ', datestr(now, 'mm/dd HH:MM PM')]);
+disp(msg); msg = [];   %Clear msg to prevent partial erasing on next update
+
+%Collect image MetaData (and assert completeness)
+GMD = iman_getmeta(dao, p.bkmd, op);
+
+
+%% PREPROCESSING PREPARATION  --------------------------------------------
+%Prepare linear unmixing (channel cross-talk correction) if applicable
+if op.unmix; [~, dmx, mxs, op.msk.freti] = iman_unmix([],GMD);  %#ok<ASGLU>
+else dmx = [];  mxs = []; end    %#ok<NASGU>
+
+%Save Parameters, MetaData and XTalk information
+%   Verify target save directory
+sd = regexp(p.sname, '^(.*)[\\/][^\\/]*$', 'tokens');  
+if~isempty(sd); sd = sd{1}{1}; if ~exist(sd,'dir'); mkdir(sd); end; end
+%   Save metadata etc.
+save([p.sname, '_Global.mat'], 'GMD', 'dmx', 'mxs', 'p', 'op');
+%   Short circuit if no XY positions specified (i.e. run was for meta-data)
+%       Or if abort condition was satisfied in the DAO
+if nxy == 0 || dao.abort;  dao.abort = false; return; end
+
+%Modify/scale parameters (now that originals are saved)
 %   Restrict backgrounds to operation XYs
 p.bkg = p.bkg(op.xypos);
-
+%   Remap channel ids to requested range
+op.seg.chan = remapid(op.seg.chan, op.cind);
+op.msk.aggfun.chan = remapid(op.msk.aggfun.chan, op.cind);
+for sm = 1:length(op.msk.rt); 
+    for sr = 1:length(op.msk.rt{sm}); 
+        op.msk.rt{sm}{sr} = remapid(op.msk.rt{sm}{sr}, op.cind); 
+    end
+end
+%   Scale size parameter by pixel sizes to deliver values in # of pixels
+pxscl = (GMD.cam.PixSizeX + GMD.cam.PixSizeY)./2;
+op.seg.minD   = op.seg.minD./pxscl;   
+op.seg.maxD   = op.seg.maxD./pxscl;
+op.trk.movrad = op.trk.movrad./pxscl;
 
 %Establish processing order (to accommodate alernate background refs)
     %Set indices to re-order run when some XYs depend on others' background
@@ -218,42 +253,6 @@ altXYi = NaN(1,nxy); altXYi(use_altXY) = xyrev([p.bkg(use_altXY).altxy]);
             ' itself properly defined.  Check background structure (bkg)',...     
             ' for XY(s) ', num2str(op.xypos(~bkvalid)),'.']);
     end
-
-
-%% DATA PREPARATION  -----------------------------------------------------
-
-%Establish Data Access (e.g. BioFormats Reader for ND2 files)
-msg = sprintf(['Loading Data Access Object (DAO). ',...
-    'Start time is: ', datestr(now, 'mm/dd HH:MM PM')]);    disp(msg);
-dao = iman_imageaccess(p.fname, p.indsz);   isTS = dao.info.ThreadSafe; 
-if ~isTS; warning('off', 'MATLAB:Java:ConvertFromOpaque'); end
-msg = sprintf(['DAO loaded. ', datestr(now, 'mm/dd HH:MM PM')]);
-disp(msg); msg = [];   %Clear msg to prevent partial erasing on next update
-
-%Collect image MetaData (and assert completeness)
-GMD = iman_getmeta(dao, p.bkmd, op);
-
-
-%% PREPROCESSING PREPARATION  --------------------------------------------
-%Scale size parameter by pixel sizes to deliver values in # of pixels
-pxscl = (GMD.cam.PixSizeX + GMD.cam.PixSizeY)./2;
-op.seg.minD   = op.seg.minD./pxscl;   
-op.seg.maxD   = op.seg.maxD./pxscl;
-op.trk.movrad = op.trk.movrad./pxscl;
-
-%Prepare linear unmixing (channel cross-talk correction) if applicable
-if op.unmix; [~, dmx, mxs, op.msk.freti] = iman_unmix([],GMD);  %#ok<ASGLU>
-else dmx = [];  mxs = []; end    %#ok<NASGU>
-
-%Save MetaData and XTalk information
-%   Verify target save directory
-sd = regexp(p.sname, '^(.*)[\\/][^\\/]*$', 'tokens');  
-if~isempty(sd); sd = sd{1}{1}; if ~exist(sd,'dir'); mkdir(sd); end; end
-%   Save metadata etc.
-save([p.sname, '_Global.mat'], 'GMD', 'dmx', 'mxs', 'p', 'op');
-%   Short circuit if no XY positions specified (i.e. run was for meta-data)
-%       Or if abort condition was satisfied in the DAO
-if nxy == 0 || dao.abort;  dao.abort = false; return; end
 
 %Establish data output sequence (to be stored for reference)
 vcorder = iman_cellmask([GMD.cam.PixNumY, GMD.cam.PixNumX, nc], ...
