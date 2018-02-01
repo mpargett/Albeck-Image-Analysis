@@ -225,10 +225,12 @@ if nxy == 0 || dao.abort;  dao.abort = false; return; end
 %   Restrict backgrounds to operation XYs
 p.bkg = p.bkg(op.xypos);
 %   Remap channel ids to requested range
-op.seg.chan = remapid(op.seg.chan, op.cind);
-op.msk.aggfun.chan = remapid(op.msk.aggfun.chan, op.cind);
-for sm = 1:length(op.msk.rt); 
-    for sr = 1:length(op.msk.rt{sm}); 
+op.seg.chan = remapid(op.seg.chan, op.cind);  % - Segmentation Channel
+if isfield(op.msk.aggfun,'chan') % - Aggregation function channels
+    op.msk.aggfun.chan = remapid(op.msk.aggfun.chan, op.cind);
+end
+for sm = 1:length(op.msk.rt)  % - Per-pixel ration channels
+    for sr = 1:length(op.msk.rt{sm})
         op.msk.rt{sm}{sr} = remapid(op.msk.rt{sm}{sr}, op.cind); 
     end
 end
