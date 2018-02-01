@@ -20,13 +20,15 @@
 %   sum - Locigal, true to return sum (default = TRUE)
 %   mean - Locigal, true to return mean (default = TRUE)
 %   var - Locigal, true to return variance (default = TRUE)
+%   reg - Region of image to use (optional), 2x2 array defining a box
+%       (UpperLeftX, UpperLeftY; LowerRightX, LowerRightY)
 
 %FIXME - Non-Uniform background subtraction, when ready
 
 function y = iman_framestats(dao, varargin)
 %Default parameters
 p = struct('t',1,'c',1,'xy',1,'z',1,'trim', [], ...
-    'sum',true,'mean',true,'var',true);
+    'sum',true,'mean',true,'var',true,'reg',[]);
 
 %Input option pair parsing:
 nin = length(varargin);     %Check for even number of add'l inputs
@@ -35,6 +37,8 @@ if rem(nin,2) ~= 0; warning(['Additional inputs must be provided as ',...
 %Splits pairs to a structure
 for s = 1:2:nin;   p.(lower(varargin{s})) = varargin{s+1};   end
 
+%Set flag for region restriction
+if isempty(p.reg); rg = false; else rg = true; end
 
 %% Process frames
 %Initialize
@@ -48,6 +52,8 @@ for sx = 1:n(1)
             for sz = 1:n(4)
             %Pull frame
             im = iman_getframe(dao,[p.t(st),p.c(sc),p.xy(sx),p.z(sz)]);
+            %Restrict region, if requested
+            if rg; im = im(p.reg(3):p.reg(4), p.reg(1):p.reg(2)); end
             %Trim distribution of values, if requested
             if ~isempty(p.trim)
                 pt = prctile(im(:), p.trim);
