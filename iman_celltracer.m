@@ -229,9 +229,9 @@ op.seg.chan = remapid(op.seg.chan, op.cind);  % - Segmentation Channel
 if isfield(op.msk.aggfun,'chan') % - Aggregation function channels
     op.msk.aggfun.chan = remapid(op.msk.aggfun.chan, op.cind);
 end
-for sm = 1:length(op.msk.rt)  % - Per-pixel ration channels
+for sm = 1:length(op.msk.rt)  % - Per-pixel ratio channels
     for sr = 1:length(op.msk.rt{sm})
-        op.msk.rt{sm}{sr} = remapid(op.msk.rt{sm}{sr}, op.cind); 
+        op.msk.rt{sm}(sr) = remapid(op.msk.rt{sm}(sr), op.cind); 
     end
 end
 %   Scale size parameter by pixel sizes to deliver values in # of pixels
