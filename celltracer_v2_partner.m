@@ -140,6 +140,9 @@ else    %Ensure NOT cell encapsulated if not multi-line
     if iscell(ip.bkmd.exp.ExVolt)
         ip.bkmd.exp.ExVolt = [ip.bkmd.exp.ExVolt{:}]; end
 end
+%   Ensure Exposure is not cell encapsulated
+    if iscell(ip.bkmd.exp.Exposure)
+        ip.bkmd.exp.Exposure = [ip.bkmd.exp.Exposure{:}]; end
 % --- ---------------------------------------------------------------- ---
 
 % --- XY Shift definition conversion ---
