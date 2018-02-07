@@ -81,8 +81,10 @@ fname = [bpath,'_xy', dh(xy<10), num2str(xy), '.mat'];
 if exist(fname,'file');    pdat = load(fname, 'masks', 'valcube', 'vcorder');
     xi = strcmpi(pdat.vcorder, 'XCoord');   %Get X channel
     yi = strcmpi(pdat.vcorder, 'YCoord');   %Get Y channel
-    if isempty(pdat.masks); error('IMAN:NoMask', ['No stored masks were ',...
-            'found for ', fname, '.']); end
+    if (p.nucmask || p.cytmask) && isempty(pdat.masks) %Check for masks
+        error('IMAN:NoMask', ...
+            ['No stored masks were ','found for ', fname, '.']); 
+    end
 else     error(['Data File ',fname,' does not exist. Check your path.'])
 end
 
