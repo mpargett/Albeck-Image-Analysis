@@ -2,13 +2,13 @@
 %   Estimate cell count by total frame intensity, using saved processed
 %   data (via the iman_celltracer pipeline).
 %
-%   [cce, scc] = iman_icellcount(bn, ...)
+%   [cce, scc, int] = iman_icellcount(bn, ...)
 %       returns the intensity-based cell count estimate (cce) as well as
-%       the segmented cell count (scc, optional), for the experiment
-%       located by bn, the base path name.  bn must indicate the path and
-%       base file name for the processed data, for example, 'L:\Processed
-%       Data\ExperimentName\BaseName', excluding the '_xy01.mat' etc. found
-%       on the processed data files.
+%       the segmented cell count (scc, optional) and total intensity (int,
+%       optional), for the experiment located by bn, the base path name.
+%       bn must indicate the path and base file name for the processed
+%       data, for example, 'L:\Processed Data\ExperimentName\BaseName',
+%       excluding the '_xy01.mat' etc. found on the processed data files.
 %
 %   Additional paraemeters may be specified as Name/Value pairs:
 %
@@ -29,7 +29,7 @@
 %   bkreg - (optional) Region of bkwell to use (defined as with reg).
 %
 
-function [cce, scc] = iman_icellcount(bn, varargin)
+function [cce, scc, int] = iman_icellcount(bn, varargin)
 %Default parameters
 p = struct('t',1,'c',1,'xy',1,'z',1,'trim', [], 'nuc', true, ...
     'cthresh', 10, 'reg', [], 'bkwell', [], 'bkreg', []);
@@ -102,8 +102,10 @@ for sx = 1:numel(p.xy)
     end
 end
 
-%Calculate cell count estimates (subtracts background)
-cce = (y.sum - (bkg.*gd.GMD.cam.PixNumX.*gd.GMD.cam.PixNumY))./(scm.*sca);
+%Calculate total intensity (minus background)
+int = y.sum - (bkg.*gd.GMD.cam.PixNumX.*gd.GMD.cam.PixNumY);
+%Calculate cell count estimates
+cce = int./(scm.*sca);
 %   Adjust for low segmented cell counts
 cce(scc < p.cthresh) = 0;
 
