@@ -86,15 +86,14 @@ assert(all(bkc), 'IMAN:bkgCheck', sprintf(['Validation failed. ',...
     'Background regions for XY position(s) ', repmat('%d, ', 1, ...
     nnz(~bkc)-1), repmat('and ', 1, nnz(~bkc)>1), '%d',' are improperly ',...
     'sized or defined. Review ip.bkg for compliance.'], op.xypos(~bkc)));
-%Rescrict any fixed values to current channels
-for sb = find([ip.bkg.fix]); ip.bkg(sb).reg = ip.bkg(sb).reg(op.cind); end
 % --- ---------------------------------------------------------------- ---
 
 % --- Backup MetaData review ---
 %   Ensure filled sample time in MetaData
-if isfield(ip,'tsamp'); 
+if isfield(ip,'tsamp');
     ip.bkmd.cam.tsamp = ip.tsamp; % keep for historical reasons
-       op.trk.linkwin = ceil(op.trk.linkwin/ip.tsamp); % change from minutes to frames
+    op.trk.nnwin = ceil(op.trk.nnwin/ip.tsamp); % change from minutes to frames
+    op.trk.gapwin = ceil(op.trk.gapwin/ip.tsamp); % change from minutes to frames
 elseif ~isfield(ip.bkmd.cam,'tsamp') || isempty(ip.bkmd.cam.tsamp)
     error('IMAN:tsamp', ['Either ip.tsamp or ip.bkmd.cam.tsamp must ',...
         'be defined as a scalar value.']);
@@ -197,7 +196,7 @@ op = cell2struct( cell(size(opfields)), opfields, 2 );
                     'maxEcc',[], 'Extent',[]);
     op.msk = struct('fret',[], 'freti',[], 'rt',{{}}, 'storemasks',false, ...
                     'saverawvals',false, 'aggfun', []);
-    op.trk = struct('movrad', [], 'linkwin', []);
+    op.trk = struct('nnwin', [], 'gapwin', []);
     op.disp = struct('meta',false, 'samples',false, 'shifts', false, ...
                      'warnings',false);
 end

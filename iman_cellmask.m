@@ -40,24 +40,29 @@
 
 %Updated 2.26.17 to improve indexing into image via masks for speed.
 %Updated 9.15.17 to include alternate aggregation functions. MP
+%Updated 4.19.18 with cyto mask refinement. MP
 
-function [valcube, mask] = iman_cellmask(imin, m, op, nmasks)
+function [valcube, mask] = iman_cellmask(imin, m, op, nuclm, bkg)
 %Version check provision
-if strcmpi(imin,'version'); valcube = 'v2.2'; return; end
+if strcmpi(imin,'version'); valcube = 'v2.3'; return; end
 
 %% Operation parameters
+if ~exist('bkg','var'); bkg = []; end
 ncgap  = round((0.05*op.seg.maxD)) + 2;  %Size of gap between nuc mask and cyto
 ncring = round((0.05*op.seg.maxD)) + 1;  %Desired cyto mask thickness
+
+%Backward compatibility for scripts missing parameters
+bc = {'nfilt',false; 'cfilt',false; 'nrode',0; 'cgap',0; 'cwidth',0};
+for s = 1:size(bc,1)
+    if ~isfield(op.msk, bc{s,1}); op.msk.(bc{s,1}) = bc{s,2}; end
+end
 
 %IF masking adjustments provided, apply (allowing backward compatibility)
 %   Nuclear Mask re-dilation from segmentation erosion
 if isfield(op.seg, 'nrode'); nrode = op.seg.nrode; else nrode = 0; end
-%   Nuclear Mask erosion
-if isfield(op.msk, 'nrode'); nrode = nrode - op.msk.nrode;  end
-%   Nuc-Cyto Mask gap
-if isfield(op.msk, 'cgap');  ncgap = ncgap + op.msk.cgap;   end
-%   Cytoplasm Mask ring width
-if isfield(op.msk, 'cwidth');  ncring = ncring + op.msk.cwidth;   end
+nrode = nrode - op.msk.nrode;       %Nuclear Mask erosion
+ncgap = ncgap + op.msk.cgap;        %Nuc-Cyto Mask gap
+ncring = ncring + op.msk.cwidth;    %Cytoplasm Mask ring width
 
 ncexpand = ncgap + ncring;  %Size to expand nuclear mask for cyto
 outpct = [20,80];          	%Percentiles to reject for outliers
@@ -74,6 +79,7 @@ if isfield(op.msk,'aggfun')
     nagt = sum(arrayfun(@(x)numel(x.chan)*numel(x.loc), op.msk.aggfun));
 else nagg = 0; nagt = 0;
 end
+
 
 %% IF coordinate/track information not provided, return valcube order
 %   In this case, imin may contain only the size of the image data
@@ -137,10 +143,7 @@ end
 
 %% Prepare and label masks
 %Split out image channels (for indexing ease when masking)
-imin = mat2cell( imin, sz(1), sz(2), ones(1,nchan) );
-
-%Unpack and label mask image
-nuclm = bwlabel(nmasks);
+imin = num2cell( imin, [1,2] );
 
 %Get tracked labels
 lbl = nuclm( sub2ind(sz, round(m.yCoord), round(m.xCoord)) );
@@ -152,6 +155,7 @@ nnuc = numel(lbl);  %Number of segmented coordinates
 if      nrode > 0; 	nuclm = imdilate(nuclm, strel('disk', nrode)); 
 elseif  nrode < 0; 	nuclm = imerode(nuclm, strel('disk', -nrode)); 
 end
+
 
 %% Extend to cytoplasm masks
 %Thicken nuclear region (to make a donut for cytoplasm)
@@ -169,6 +173,26 @@ ctemp(ctemp == Inf) = 0;  cytlm(~(ctemp==cytlm)) = 0;
 
 %Remove Nuclear pixels from Cytoplasm region
 cytlm = cytlm.*~(imdilate(nuclm, strel('disk', ncgap))>0);
+
+
+%% Clean up cytoplasm masks, based on segmentation channel(s) 
+%Determine available segmentation channels
+if numel(op.seg.chan) < 2; op.seg.chan = [op.seg.chan, NaN]; end
+nuchan = op.seg.chan(1+op.seg.cyt);  %Get Nuclear channel
+cchan = op.seg.chan(2-op.seg.cyt);  %Get Cytoplasm channel
+%Clean Nuclear signal from cyto mask, if channel is available
+if op.msk.nfilt && ~isnan(nuchan)
+    nst = prctile(imin{nuchan}(logical(nuclm)), 5); %Nuc signal threshold
+    cytlm(imin{nuchan} > nst) = 0; %Remove ~Nuclear signal from Cyto mask
+end
+%Enforce foreground levels of Cytoplasm signal in mask, if available
+if op.msk.cfilt && ~isnan(cchan) && ~isempty(bkg);  
+    bkg_rat = 0.5; %Default SNR - 1 is 0.5 (1.5 SNR)
+    if op.seg.cyt && ~isempty(op.seg.sigthresh) %Handle sigthresh as with cellid, if segmented 
+        bkg_rat = max(0, (op.seg.sigthresh./bkg(cchan)-1)*(1+op.seg.hardsnr)/2 );
+    end
+    cytlm(imin{cchan} <= bkg(cchan).*bkg_rat) = 0; %Remove bkg pixels
+end
 
 %Store mask matrices (binary for whole image masking)
 mask.nuc = logical(nuclm);  mask.cyt = logical(cytlm);

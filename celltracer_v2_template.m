@@ -115,8 +115,10 @@ op.mdover   = {'exp', 'ExVolt'; 'exp', 'Exposure';'exp','Filter'; ...
 
 %Procedure settings ***CRITICAL - Review carefully
 %   Segmentation settings
-op.seg.chan = [];       %Color channel on which to segment
-op.seg.cyt  = false; 	%Segment on cytoplasmic signal
+op.seg.chan = [];       %Color channel on which to segment  !!
+%   A second seg channel may be given (opposite nuc/cyt of first), to
+%   filter cyto masks. Use op.seg.cyt to specify the FIRST seg channel
+op.seg.cyt  = false; 	%Segment on cytoplasmic signal      !!
 %       The following defaults are typical of MCF10As at 20x magnification
 op.seg.maxD = 25;       %Maximum nuclear diameter (um)
 op.seg.minD = 8;      	%Minimum nuclear diameter (um)
@@ -125,6 +127,7 @@ op.seg.minD = 8;      	%Minimum nuclear diameter (um)
 op.seg.maxEcc = 0.9;    %Maximum eccentricity [0-1] (opposite of circularity)
 op.seg.Extent = [0.65, 0.85]; %Minimum fraction of bounding box filled 
 %   Extent range is [0-1], value for a cirlce is PI/4
+op.seg.maxSmooth = 0.1;     %Maximum fraction of convex hull without mask 
 op.seg.sigthresh = []; %[Optional] Minimum intensity of 'good' signal
 %   If you use sigthresh, pre-subtract any camera baseline
 op.seg.hardsnr = false;  %Typically kept to FALSE.  TRUE makes the signal 
@@ -146,10 +149,25 @@ op.msk.saverawvals = true;  %Save all raw valcube entries (pre-tracking)
 op.msk.nrode = 0;   %[Optional] Approx. # pixels to erode final nuc mask
 op.msk.cgap = 0;    %[Optional] Approx. # pixels to expand nuc-cyt mask gap
 op.msk.cwidth = 0;  %[Optional] Approx. # pixels to expand cyto ring width
+op.msk.nfilt = false; %[Optional] TRUE to filter cyto mask by nuc channel
+%   Removes cyto mask where nuc signal > 5th percentile of nuc channel
+%   IF significant varied cyto staining in nuc channel, do not use
+op.msk.cfilt = false; %[Optional] TRUE to filter cyto mask by cyt channel
+%   Removes cyto mask where cyto signal is at background (below sigthresh)
 
 % Tracking settings (for utrack)
-op.trk.movrad = 25;     % Radius (in um) to consider for cell movement
-op.trk.linkwin = 75;    % Time window (in min) to consider for tracking
+%   Typically, these do not require editing
+op.trk.linkrad = 10;        % Radius (in um) to consider for frame-to-frame 
+                            %   linking of cell movement
+op.trk.minTrkLength = 5;    % Minimum number of consecutive frames required
+                            %   for a track to be used in gap closing
+op.trk.gaprad = 15;         % Radius (in um) for gap closing
+op.trk.gapwin = 30;         % Time window (in minutes) for gap closing
+op.trk.msRadMult = 1;       % Multiplier for search radius when finding 
+                            %   merges and splites (Keep at 1 if tracking
+                            %   splits is not critical. If increased, run
+                            %   validation GUI to check flagged splits for
+                            %   real/fake.
 
 %   Display settings - select which options to show while running
 op.disp.meta     = false;       %Final MetaData to be used
@@ -179,10 +197,23 @@ op.msk.fret = ip.bkmd.exp.FRET;     %Copy FRET channel names to op
 %   reset pst to empty - it is needed to avoid reloading of the dataset.
 % pst = [];
 % pst = iman_segcheck(ip, op, 't',1, 'xy',1, 'pastinfo',pst);
+%
+%Optional tracking check
+%   Run the following, after editing the time range ('t') and potentially
+%   the range of frames ('frm') to plot ('splits' instructs the routine to
+%   plot the frame before and after any track split).  Reset d.tF to empty
+%   to rerun u-track if op.trk parameters have been changed.  Do not reset
+%   d = [] - it is needed to avoid reloading of the dataset and rerunning
+%   segmentation.
+% d = [];       d.tF = [];
+% d = iman_trkcheck(ip, op, d, 't',1:100, 'npth',10, 'frm','splits');
+%
+%  After running, can use the following to run segview
+%   iman_segview(ip.sname,1,1,'printid',true,'idcolor',[0,0,0]);
 
 
 %% Main procedure
-[dao, GMD, dmx] = iman_celltracer(ip, op);f
+[dao, GMD, dmx] = iman_celltracer(ip, op);
 
 
 
