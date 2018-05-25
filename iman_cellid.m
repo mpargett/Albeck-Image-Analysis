@@ -25,6 +25,7 @@
 %                    to the area of its bounding box, rotated to match the
 %                    shape's orientation, [0-1], value for a circle or
 %                    ellipse is PI/4.
+%       maxSmooth   -Maximum fraction of a cell's area that can be convex
 %       sigthresh   -Signal value to use as a foreground threshold
 %       hardsnr     -Logical - TRUE is sigthresh is a hard cutoff
 %       nth         -Number of thresholds to use for segmentation
@@ -56,7 +57,7 @@ if ~isempty(bkg); otim_bkg = bkg(p.chan); else otim_bkg = 0; end
 if ~isempty(p.sigthresh)
     %   Use a conservative estimate of 1/2 the SNR as threshold
     %   unless directed to use hard SNR threshold (op.seg.hardsnr)
-    bkg_rat = max(0, (p.sigthresh./otim_bkg - 1)*(1 + p.hardsnr)/2 );
+    bkg_rat = max(0, (p.sigthresh(1)./otim_bkg - 1)*(1 + p.hardsnr)/2 );
 end
 
 %% Preliminary calculations

@@ -188,8 +188,11 @@ end
 %Enforce foreground levels of Cytoplasm signal in mask, if available
 if op.msk.cfilt && ~isnan(cchan) && ~isempty(bkg);  
     bkg_rat = 0.5; %Default SNR - 1 is 0.5 (1.5 SNR)
-    if op.seg.cyt && ~isempty(op.seg.sigthresh) %Handle sigthresh as with cellid, if segmented 
-        bkg_rat = max(0, (op.seg.sigthresh./bkg(cchan)-1)*(1+op.seg.hardsnr)/2 );
+    %Handle sigthresh as with cellid, if provided
+    if ~isempty(op.seg.sigthresh) ... % But check for 2nd term if ~cyt
+            && (op.seg.cyt || numel(op.seg.sigthresh > 1))
+        bkg_rat = max(0, (op.seg.sigthresh(2-op.seg.cyt)./bkg(cchan)-1)...
+            *(1+op.seg.hardsnr)/2 );
     end
     cytlm(imin{cchan} <= bkg(cchan).*bkg_rat) = 0; %Remove bkg pixels
 end
