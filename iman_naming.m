@@ -4,6 +4,7 @@
 %   [fpn, ftn] = iman_naming()
 %       To get cell arrays with current naming conventions and regular
 %       expression maps.
+%   [isvalid] = iman_naming('validate',)
 
 function [fpn, ftn] = iman_naming(varargin)
 %Version check provision after name definitions
@@ -57,13 +58,53 @@ ftn = { 'Filter_DAPI',         'dapi'; ...
 %Version check and name validation function
 if nargin > 0
     if strcmpi(varargin{1},'version'); fpn = 'v1.0'; return; 
-    elseif strcmpi(varargin{1},'validate'); nmi = [fpn; ftn];
-        fpn = cellfun(@(x)any(strcmp(x, nmi(:,1))), varargin(2:end));
-        if nargout == 2; ftn = varargin(2:end); 
-            for s = find(~fpn);  ftn{s} = nmi{~cellfun(@isempty, ...
-                    regexpi(ftn{s}, nmi(:,2))), 1};  end
+    elseif strcmpi(varargin{1},'validate'); 
+        %To check names and (optionally) attempt correction
+        np = size(fpn,1);        nmi = [fpn; ftn];
+        %   Adjust filter name patterns 
+        nmi(np+1:end,2) = cellfun(@(x)['filter_?',x], ftn(:,2), 'Un', 0);
+        c = assertcell(varargin(2:end)); 
+        fpn = cellfun(@(x)any(strcmp(x, nmi(:,1))), c);
+        if nargout == 2;    ftn = c;    fpn = double(fpn);
+            for s = find(~fpn) %FOR each failed validation
+                %   Get indices for matches
+                xi = ~cellfun(@isempty, regexpi(c{s}, nmi(:,2))); 
+                %Assign output and flag, if unique match is found
+                if nnz(xi) == 1; ftn{s} = nmi{xi, 1}; fpn(s) = 2;
+                else  %OR declare problems
+                    if nnz(xi) == 0;    ftn{s} = 'No match found';
+                    elseif nnz(xi) > 1; ftn{s} = 'Too many matches found';
+                    end
+                end
+            end
+        end
+        
+    elseif strcmpi(varargin{1},'match'); 
+        %To match correct names, 2nd input must be FPhores, 3rd Filters
+        if nargin > 1; c = assertcell(varargin(2));     %Fluorophores
+            fpn = cellfun(@(x)fpn{~cellfun(@isempty,regexpi(x, fpn(:,2))),1}, ...
+                c, 'Un',0);
+        end
+        if nargin > 2; c = assertcell(varargin(3));     %Filters
+            ftn = cellfun(@(x)ftn{~cellfun(@isempty,regexpi(x, ftn(:,2))),1}, ...
+                c, 'Un',0);
         end
     end
 end
     
 end
+
+%Subfunction to ensure single cell array of names
+function c = assertcell(c)
+    if ~iscell(c); c = {c}; end
+    ci = cellfun(@iscell,c);    %Get nested cells
+    if any(ci)  %Fix any nested cells found and check again
+        c(~ci) = cellfun(@(x){x}, c(~ci), 'Un',0); %Encapsulate singles
+        c = assertcell([c{:}]); %Cat through now complete first cell layer
+    end
+    %Assert only character strings within each cell
+    assert(all(cellfun(@ischar, c)), ['Name inputs must be strings or ',...
+        'cell arrays of strings.']);
+end
+
+

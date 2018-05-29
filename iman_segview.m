@@ -28,6 +28,8 @@
 %       nuccolor - [1x3 array] RGB color for nuclear masks
 %       cytcolor - [1x3 array] RGB color for cytoplasm masks
 %       idcolor  - [1x3 array] RGB color cell IDs
+%       mscolor  - [1x3 array] RGB color to plot merge/split lines
+%       msrange  - [Scalar] Number of frames near merge/splits to plot line
 %       idsize   - [Scalar or 1x2] Size of numbers to print for IDs.
 %           Default: 2.  1 gives numbers at 3 pixels by 5 pixels.
 %       nw       - [Scalar] Number of workers to use in parallel.  Only
@@ -62,6 +64,8 @@ p.imcolor   = [1, 1, 1];    %Color to plot image channel (Blue)
 p.nuccolor  = [0, 0, 1];    %Color to plot nuc masks (Yellow/Green)
 p.cytcolor  = [0, 1, 0.5];  %Color to plot cyt masks (Red)
 p.idcolor   = [1, 0.3, 0.3];    %Color to print Cell IDs (White)
+p.mscolor   = [1,1,0];      %Color to plot merge/split lines
+p.msrange   = 2;            %Time range for showing merge/splits
 p.idsize    = 2;            %Text size to print Cell IDs
 p.nw        = 1;            %Number of workers for parallel
 p.keeppool  = false;        %Do not keep parallel pool
@@ -78,7 +82,7 @@ for s = 1:2:nin;   p.(lower(varargin{s})) = varargin{s+1};   end
 dh = '0';   %Allow for leading zero padded XY in loading path 
 %Load processed data file 
 fname = [bpath,'_xy', dh(xy<10), num2str(xy), '.mat'];
-if exist(fname,'file');    pdat = load(fname, 'masks', 'valcube', 'vcorder');
+if exist(fname,'file');    pdat = load(fname);
     xi = strcmpi(pdat.vcorder, 'XCoord');   %Get X channel
     yi = strcmpi(pdat.vcorder, 'YCoord');   %Get Y channel
     if (p.nucmask || p.cytmask) && isempty(pdat.masks) %Check for masks
@@ -139,6 +143,18 @@ else    for sw = 1:length(wid); warning('off', wid{sw}); end
     %   ^Or else, just loop for the client
 end
 
+%Initialize merge/split assembly
+ms = ~isnan(pdat.linfo);  nc = size(pdat.valcube,1);
+%   Get list of start and end times for all tracks
+dm = diff([true(nc,1),isnan(pdat.valcube(:,:,xi)),true(nc,1)],1,2);
+se = nan(nc,2);
+for s = find( any(dm ~= 0, 2) )'
+    [~,se(s,1)] = find(dm(s,:) < 0,1,'first');
+    [~,se(s,2)] = find(dm(s,:) > 0,1,'last');
+end
+%Merge and Split start/end vectors
+me = [find(ms(:,2)),se(ms(:,2),2)];  ss = [find(ms(:,1)),se(ms(:,1),1)];
+
 %Initialize parallelized variables
 segstack = cell(p.nw,1);  imname = glb.p.fname;  indsz = glb.p.indsz;
 tst = glb.op.trng(1);  npix = [glb.GMD.cam.PixNumX, glb.GMD.cam.PixNumY];
@@ -159,16 +175,34 @@ parfor ps = 1:p.nw
         
         k = k + 1;  %Iterate output frame index
         %Align time if processing doesnt start at 1.
-        mskframe = s - (tst-1);
+        mf = s - (tst-1);
         %Get the frame
         IM = iman_getframe(daop, [s,cid,xy,1]);
         IM = IM./prctile(IM(:),95);             %Scale for visibility
+        %   Apply image color
+        IM = bsxfun(@times, IM, shiftdim(p.imcolor(:),-2));
+        
+        %Merge/Split indicators
+        %   Find tracks in this or adjacent frames that merge or split
+        msi = [ me(abs(me(:,2) - mf) <= p.msrange,:); ...
+                ss(abs(ss(:,2) - mf) <= p.msrange,:)    ]; %#ok<PFBNS>
+        %   Assign xy coordinates for each Merge/Split
+        msxy = [];
+        for m = 1:size(msi,1)
+            msxy = cat(1, msxy, [pdat.valcube(msi(m,1), msi(m,2), xi), ...
+                pdat.valcube(pdat.linfo(msi(m,1)), msi(m,2), xi), ...
+                pdat.valcube(msi(m,1), msi(m,2), yi), ...
+                pdat.valcube(pdat.linfo(msi(m,1)), msi(m,2), yi)]); %#ok<PFBNS>
+        end;  msxy = msxy(~any(isnan(msxy),2),:);
+                %   Plot lines to indicate merge/splits
+        if ~isempty(msxy)
+            IM = pixlineplotter(IM, round(msxy), p.mscolor); 
+        end
         
         %Nuclear Masks
         if p.nucmask
-            IM = bsxfun(@times, IM, shiftdim(p.imcolor(:),-2));
             %   Get nuclear masks
-            nm = bwunpack(pdat.masks(mskframe).nuc, npix(2)); %#ok<PFBNS>
+            nm = bwunpack(pdat.masks(mf).nuc, npix(2)); %#ok<PFBNS>
             %   Dilate and subtract for a boundary
             nm = imdilate(nm,st2) & ~nm;
             %   Set mask boundaries to desired color
@@ -178,23 +212,23 @@ parfor ps = 1:p.nw
         %Cytoplasms Masks
         if p.cytmask    %Repeat plotting as with nuclear, if called
             %   Get masks, boundaries, and write to image
-            nm = bwunpack(pdat.masks(mskframe).cyt, npix(2));
+            nm = bwunpack(pdat.masks(mf).cyt, npix(2));
             nm = imdilate(nm,st2) & ~nm;
             IM(repmat(nm,1,1,3)) = ones(nnz(nm),1)*p.cytcolor;
         end
-        
+                
         %Cell IDs
         if p.printid    %Only plot IDs if requested
-            gi = find(~isnan(pdat.valcube(:,s,xi))); %Get good indices
+            gi = find(~isnan(pdat.valcube(:,mf,xi))); %Get good indices
             %   Get number images for each ID, set up offsets for numbers
             y = num2pix(gi,n); nn = [-1/2, 1/2]; nh = size(y{1},1).*nn;
             %   Initialize the ID mask for the whole image
             idmask = size(IM);  idmask = false(idmask(1:2));
             for sg = 1:numel(y) %FOR each ID
                 %   Get x bounds for insert region
-                xb = floor(pdat.valcube(gi(sg), s, xi) + size(y{sg},2).*nn);
+                xb = floor(pdat.valcube(gi(sg), mf, xi) + size(y{sg},2).*nn);
                 %   Get y bounds for insert region
-                yb = floor(pdat.valcube(gi(sg), s, yi) + nh);
+                yb = floor(pdat.valcube(gi(sg), mf, yi) + nh);
                 %Enforce image bounds
                 if xb(1) < 1;           xb = xb + 1 - xb(1);        end
                 if xb(2) > npix(1);     xb = xb + npix(1) - xb(2);     end
@@ -254,6 +288,37 @@ di = cellfun(@(xx) reshape(cat(1, xx, ones(size(xx)).*11), ...
                     1, numel(xx).*2), di, 'Un', 0);
 %Concatenate pixel patterns (neglect trailing spacer)
 y = cellfun(@(yy)cat(2, n{yy(1:end-1)}), di, 'Un', 0);
+end
+
+%Subfunction:  Plot (pixelized) lines between points
+function im = pixlineplotter(im, xy, cvalue)
+%Get derivatives
+dd = (xy(:,4)-xy(:,3))./(xy(:,2)-xy(:,1));
+%Find lines that are mostly vertical, and flip associated derivatives
+isv = abs(dd) > 1;
+%   Flip associated xy coordinates
+xt = xy(isv,1:2); xy(isv,1:2) = xy(isv,3:4); xy(isv,3:4) = xt;
+%Find pairs with decreasing fast coordinates
+isd = (xy(:,2) - xy(:,1)) < 0;
+%   Then flip point orders for decreasing cases
+xt = xy(isd,[1,3]); xy(isd,[1,3]) = xy(isd,[2,4]); xy(isd,[2,4]) = xt;
+%Recalculate derivative (now slow/fast)
+dd = (xy(:,4)-xy(:,3))./(xy(:,2)-xy(:,1));
+
+szim = size(im);  n = prod(szim(1:2));
+for s = 1:numel(dd)     %FOR each line
+    %   Get fast axis points
+    x = xy(s, 1):xy(s, 2);
+    %   Get slow axis points, 2 per fast
+    y = xy(s, 3) + (x - x(1)).*dd(s);  y = bsxfun(@plus,floor(y),(-1:2)');
+    %   Duplicate fast axis, and swap IF line was vertical
+    x = [x;x;x;x];  if isv(s);  xt = x; x = y; y = xt; end %#ok<AGROW>
+    %   Assign points to image
+    for ss = 1:szim(3) %One color channel at a time
+        im( sub2ind(szim(1:2), y, x) + (ss-1)*n ) = cvalue(ss);
+    end
+end
+
 end
 
 %Subfunction:  Define pixel shapes for numbers 0-9

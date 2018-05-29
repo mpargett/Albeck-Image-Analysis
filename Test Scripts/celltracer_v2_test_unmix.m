@@ -106,29 +106,50 @@ op.mdover   = { 'exp', 'Channel';   'exp', 'Exposure';  ...
 %Procedure settings
 %   Segmentation settings
 op.seg.chan = 'CFP';       %Color channel on which to segment
-op.seg.cyt  = true; 	%Segment on cytoplasmic signal
+op.seg.cyt  = false; 	%Segment on cytoplasmic signal
 %       The following defaults are typical of MCF10As at 20x magnification
 op.seg.maxD = 40;       %Maximum nuclear diameter (pixels)
 op.seg.minD = 12;       %Minimum nuclear diameter (pixels)
 op.seg.maxEcc = 0.9;    %Maximum eccentricity [0-1] (opposite of circularity)
 op.seg.Extent = [0.65, 0.85]; %Minimum fraction of bounding box filled 
 %   Extent range is [0-1], value for a cirlce is PI/4
-
+op.seg.maxSmooth = 0.1;     %Maximum fraction of convex hull without mask 
 %       It is recommended to scale imaging for nuclei (segmentation
 %       targets) to be greater than 10 pixels in diameter.
 op.seg.sigthresh = []; %[Optional] Minimum intensity of 'good' signal
-%   If you use sigthresh, pre-subtract any camera baseline
+%   If using sigthresh, pre-subtract camera baseline (default is 1.5*bkg)
 op.seg.hardsnr = false;  %Typically kept to FALSE.  TRUE makes the signal 
 %   threshold 'hard', enforcing cutoff of any pixels below it.
+op.seg.nrode = 0;   %[Optional] Approx. number of pixels to erode nuc mask
+%   NOTE: op.seg.nrode is only to improve nearby cell separation - it is
+%   undone in final masks.  Use op.msk.nrode to adjust final masks.
 
 %    Masking settings
 op.msk.rt = {};
 op.msk.storemasks = false;  	%Save all segmentation masks
 op.msk.saverawvals = true;  %Save all raw valcube entries (pre-tracking)
+op.msk.nrode = 1;   %[Optional] Approx. # pixels to erode final nuc mask
+op.msk.cgap = 0;    %[Optional] Approx. # pixels to expand nuc-cyt mask gap
+op.msk.cwidth = 0;  %[Optional] Approx. # pixels to expand cyto ring width
+op.msk.nfilt = false; %[Optional] TRUE to filter cyto mask by nuc channel
+%   Removes cyto mask where nuc signal > 5th percentile of nuc channel
+%   IF significant varied cyto staining in nuc channel, do not use
+op.msk.cfilt = false; %[Optional] TRUE to filter cyto mask by cyt channel
+%   Removes cyto mask where cyto signal is at background (below sigthresh)
 
 % Tracking settings (for utrack)
-op.trk.movrad = 25;     % Radius (in um) to consider for cell movement
-op.trk.linkwin = 75;    % Time window (in min) to consider for tracking
+%   Typically, these do not require editing
+op.trk.linkrad = 10;        % Radius (in um) to consider for frame-to-frame 
+                            %   linking of cell movement
+op.trk.minTrkLength = 3;    % Minimum number of consecutive frames required
+                            %   for a track to be used in gap closing
+op.trk.gaprad = 15;         % Radius (in um) for gap closing
+op.trk.gapwin = 5;          % Time window (in frames) for gap closing
+op.trk.msRadMult = 1;       % Multiplier for search radius when finding 
+                            %   merges and splites (Keep at 1 if tracking
+                            %   splits is not critical. If increased, run
+                            %   validation GUI to check flagged splits for
+                            %   real/fake.
 
 %   Display settings - select which options to show while running
 op.disp.meta     = false;       %Final MetaData to be used
@@ -154,6 +175,12 @@ op.msk.fret = ip.bkmd.exp.FRET;     %Copy FRET channel names to op
 [dao, GMD, dmx] = iman_celltracer(ip, op);
 
 
+%Cytoplasmic filtering test
+fprintf('\nBeginning test with mask filtering.\n');
+op.seg.chan = {'CFP','YFP'};
+op.msk.nfilt = true; op.msk.cfilt = true; 
+[ip, op] = celltracer_v2_partner('validate', ip, op);
+[dao, GMD, dmx] = iman_celltracer(ip, op);
 
 end
 

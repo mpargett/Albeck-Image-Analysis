@@ -24,6 +24,10 @@ if ~exist('SP', 'var') || isempty(SP)
     SP = iq_getspectralpar;
 end
 
+%Assert propernames for MetaData on FPhores and Filters
+[MD.exp.FPhore, MD.exp.Filter] = ...
+    iman_naming('match',MD.exp.FPhore, MD.exp.Filter);
+
 %Get Light source spectral power
 lsPower = iq_getlightsourcespectra(MD.exp.Light);
 lsn = fieldnames(lsPower); lsn = lsn(~strcmpi(lsn,'WaveLength'));

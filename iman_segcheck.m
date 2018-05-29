@@ -25,8 +25,9 @@
 %   cclr        - Color of cytoplasm masks, RGB triplet
 %   pastinfo    - Data Access info for future calls on the same dataset
 %   imthresh    - Image percentile threshold for display (default 95)
+%   display     - TRUE (default) to display image and masks
 
-function [imd] = iman_segcheck(ip,op,varargin)
+function [imd, imo] = iman_segcheck(ip,op,varargin)
 %% Handle options
 p.nclr = [0,0,1];
 p.cclr = [0,1,0.5];
@@ -36,6 +37,7 @@ p.t  = 1;
 p.c  = op.seg.chan;
 p.xy = 1;
 p.z  = 1;
+p.display = true;
 
 %Input option pair parsing:
 nin = length(varargin);     %Check for even number of add'l inputs
@@ -69,34 +71,44 @@ txyz = [p.t, p.xy, p.z];  %By default, point to this image
 %   If alternate XY indicated, use it
 if ~isempty(ip.bkg(txyz(2)).altxy);  txyz(2) = ip.bkg(txyz(2)).altxy; end
 %   If not dynamic, use time point 1
-if ~ip.bkg(txyz(2)).dyn;             txyz(1) = 1;	end
+if ip.bkg(txyz(2)).dyn; nbt = ip.indsz.t; else txyz(1) = 1; nbt = 1; end
 
 %IF this XY not yet accessed for background, pre-allocate w/ NaN
-if isempty(imd.bkg{txyz(2)});    imd.bkg{txyz(2)} = ...
-        nan(1 + ip.bkg(txyz(2)).fix.*(ip.indsz.t-1), ip.indsz.c);   end
+if isempty(imd.bkg{txyz(2)}); imd.bkg{txyz(2)} = nan(nbt, ip.indsz.c); end
 %Check if this background was already collected
 if any(isnan(imd.bkg{txyz(2)}(txyz(1),:)))  %IF not collected, do so now
-    if ip.bkg(txyz(2)).fix;  bkg(p.t,:) = ip.bkg(txyz(2)).reg;  %IF fixed, apply
-    else 	bkg(p.t,:) = get_bkg(imd, ip, txyz, e_inv);  %ELSE get values
+    if ip.bkg(txyz(2)).fix;  bkg(txyz(1),:) = ip.bkg(txyz(2)).reg - ip.bval;  %IF fixed, apply
+    else 	bkg(1,:) = get_bkg(imd, ip, txyz, e_inv);  %ELSE get values
     end;    imd.bkg{txyz(2)}(txyz(1),:) = bkg;
 else bkg = imd.bkg{txyz(2)}(txyz(1),:);	%IF already collected, use old
 end
 
+%Remove backround level from image
+im = bsxfun( @minus, im, reshape(bkg, 1, 1, numel(bkg)) );
+
+%Perform linear channel unmixing (optional)
+if op.unmix; im(:,:,op.cind) = iman_unmix(im(:,:,op.cind),imd.GMD); end
+                
 %% Segment and mask image
 %   Adjust size parameters for calibration
 pxscl = (imd.GMD.cam.PixSizeX + imd.GMD.cam.PixSizeY)./2;
 op.seg.minD = op.seg.minD./pxscl;  op.seg.maxD = op.seg.maxD./pxscl;
 %Get segmentation masks
 [m, nmask] = iman_cellid(im, op.seg, bkg);
-[valcube, mask] = iman_cellmask(im, m, op, nmask);
+[valcube, mask] = iman_cellmask(im, m, op, nmask, bkg);
 
 %Display
+if p.display
 for s = p.c(:)'
     imm = iman_maskoverlay(im(:,:,s)-bkg(s),mask.nuc,p.nclr,3, p.imthresh);
     imm = iman_maskoverlay(imm,mask.cyt,p.cclr,2, p.imthresh); 
     figure; imshow(imm); 
     title(['XY:', num2str(p.xy),' C:', num2str(s), ' T:', num2str(p.t)]);
 end
+end
+
+%IF full image and data are requested, package
+if nargout > 1;    imo.im = im;    imo.m = m;    imo.msk = mask;    end
 
 end
 

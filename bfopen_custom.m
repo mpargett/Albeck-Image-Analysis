@@ -101,6 +101,12 @@ for s = 1:nser  %FOR Each Series
         
 end  %FOR Each Series
 
+%% Reorder time values to fix misalignment
+allt = unique(cat(1, out.time));
+allt = num2cell(reshape(allt, nser, r.getSizeT),2);
+[out.time] = deal(allt{:});
+
+
 end
 
 

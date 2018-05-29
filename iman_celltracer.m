@@ -224,21 +224,23 @@ if nxy == 0 || dao.abort;  dao.abort = false; return; end
 %Modify/scale parameters (now that originals are saved)
 %   Restrict backgrounds to operation XYs
 p.bkg = p.bkg(op.xypos);
+%   Rescrict any fixed values to current channels
+for sb = find([p.bkg.fix]); p.bkg(sb).reg = p.bkg(sb).reg(op.cind); end
 %   Remap channel ids to requested range
 op.seg.chan = remapid(op.seg.chan, op.cind);  % - Segmentation Channel
 if isfield(op.msk.aggfun,'chan') % - Aggregation function channels
     op.msk.aggfun.chan = remapid(op.msk.aggfun.chan, op.cind);
 end
-for sm = 1:length(op.msk.rt)  % - Per-pixel ratio channels
-    for sr = 1:length(op.msk.rt{sm})
-        op.msk.rt{sm}(sr) = remapid(op.msk.rt{sm}(sr), op.cind); 
-    end
-end
+% - Per-pixel ratio channels
+op.msk.rt = cellfun(@(x)remapid(x, op.cind), op.msk.rt, 'Un',0);
+
 %   Scale size parameter by pixel sizes to deliver values in # of pixels
 pxscl = (GMD.cam.PixSizeX + GMD.cam.PixSizeY)./2;
 op.seg.minD   = op.seg.minD./pxscl;   
 op.seg.maxD   = op.seg.maxD./pxscl;
-op.trk.movrad = op.trk.movrad./pxscl;
+if isfield(op.trk,'linkrad'); op.trk.linkrad = op.trk.linkrad./pxscl; end
+if isfield(op.trk,'gaprad'); op.trk.gaprad = op.trk.gaprad./pxscl; end
+if isfield(op.trk,'movrad'); op.trk.movrad = op.trk.movrad./pxscl; end
 
 %Establish processing order (to accommodate alernate background refs)
     %Set indices to re-order run when some XYs depend on others' background
@@ -365,7 +367,7 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
                 
                 %Perform Cell signal measurement, by masking
                 [valcube{ps}{s}, masks{ps}{s}] = iman_cellmask(im, ...
-                    movieInfo{ps}{1,s}, op, nmask);
+                    movieInfo{ps}{1,s}, op, nmask, bkit);
                 
                     % - Backup for display/debugging, when needed - 
                     if ~isempty(dbk{ps}); dbk{ps}.mz = movieInfo{ps}{s};
@@ -424,12 +426,27 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
                 disp(msg);
         end
         
-        %Prepare for uTrack - movieInfo fields must include a 2nd column of
-        %   zeros, for Std Deviation of position and amplitude 
-        for s = 1:numel(movieInfo)
-            movieInfo(s) = structfun(@(x)[x, zeros(size(x,1),1)], ...
-                movieInfo(s), 'UniformOutput', false);
+        %Prepare for uTrack - movieInfo fields must include a 2nd column,
+        %   for Std Deviation of positions and amplitude 
+        mif = intersect({'xCoord','yCoord','zCoord','amp'},...
+            fieldnames(movieInfo));  %Relevant movieInfo Fieldnames
+        for sf = 1:numel(mif);  %FOR each relevant name
+            if size(movieInfo(1).(mif{sf}),2) < 2 %Skip if already filled
+                %Check if coordinate or amplitude and calculate estimated
+                %   St. Dev. if associated info is present
+                if ~strcmpi('amp',mif{sf}) && isfield(movieInfo, 'are')
+                    mifun = @(x)[x.(mif{sf}), sqrt(x.are./pi)/6];
+                elseif strcmpi('amp',mif{sf}) && ...
+                        all(isfield(movieInfo, {'ampstd','are'}))
+                    mifun = @(x)[x.amp, x.ampstd./sqrt(x.are)];
+                else  %Or just append zeros for the St. Dev.
+                    mifun = @(x)[x.(mif{sf}), zeros(size(x.mif{sf}))];
+                end
+            end
+            mtmp = arrayfun(mifun, movieInfo, 'Un', 0); %Append St Dev
+            [movieInfo.(mif{sf})] = deal(mtmp{:});      %Replace in mI
         end
+        
         %Call uTrack (uses trackCloseGapsKalmanSparse)
         tracksFinal = iman_utrack_call(movieInfo, op.trk);
         
@@ -440,9 +457,9 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
         %   If only one time point, coord will be empty.  Fill.
         if numel(movieInfo) == 1;
             coord = cat(3,movieInfo.xCoord(:,1), movieInfo.yCoord(:,1));
+        elseif ~isempty(coord); coord(:,(end+1):nT,:) = NaN;
+            %If coords is not full length (no tracks are full), NaN pad
         end
-        %If coords is not full length (no tracks are full), pad with NaN
-        coord(:,(end+1):nT,:) = NaN;
         
         %Reverse the XY shift, if used
         if  op.fixshift;  coord = iman_xyshift(coord, ctrans, -1);  end
@@ -583,7 +600,7 @@ switch in
         figure(runid+1); clf reset; %Figure with unique ID for this run
         set(runid+1, 'Position', [80, 50, 710, 600]);
         %Show Image
-        imshow( imresize(dbk.rfim(:,:,op.seg.chan), [dsz.y,dsz.x]), [], ...
+        imshow( imresize(dbk.rfim(:,:,op.seg.chan(1)), [dsz.y,dsz.x]), [], ...
             'Border', 'tight', 'InitialMagnification', 'fit');  hold on;
         %Plot centers
         scatter(dbk.mz.xCoord.*dsz.c, ...
@@ -607,7 +624,7 @@ switch in
         %Get mask boundaries from stored mask images
         nmim = bwboundaries(bwunpack(dbk.msk.nuc, GMD.cam.PixNumY));
         cmim = bwboundaries(bwunpack(dbk.msk.cyt, GMD.cam.PixNumY));
-        imshow( dbk.rfim(:,:,op.seg.chan), [], ...
+        imshow( dbk.rfim(:,:,op.seg.chan(1)), [], ...
             'Border', 'tight', 'InitialMagnification', 'fit'); hold on;
         for ds = 1:numel(nmim)
             plot(nmim{ds}(:,2),nmim{ds}(:,1), 'g-');
@@ -632,7 +649,7 @@ switch in
             subplot('position', [0,0,0.475,0.95]); %Start with pre-shift on left
             
             %Show pre-shift image
-            imshow( imresize(sbk(ds1).im(:,:,op.seg.chan), [dsz.y,dsz.x]), [], ...
+            imshow( imresize(sbk(ds1).im(:,:,op.seg.chan(1)), [dsz.y,dsz.x]), [], ...
                 'Border', 'tight', 'InitialMagnification', 'fit');  hold on;
             %Plot pre-shift centers (post-process)
             scatter(coord(:,tpts(ds1),1).*dsz.c, ...
@@ -646,7 +663,7 @@ switch in
             %Show also on post-shift image
             subplot('position', [0.525,0,0.475,0.95]); %Show post-shift on right
             %Show post-shift image, aligned
-            imshow( imresize(iman_xyshift(sbk(ds2).im(:,:,op.seg.chan), ...
+            imshow( imresize(iman_xyshift(sbk(ds2).im(:,:,op.seg.chan(1)), ...
                 ctrans, 1, [], sbk(ds2).frame), [dsz.y,dsz.x]), [], ...
                 'Border', 'tight', 'InitialMagnification', 'fit');  hold on;
             
@@ -666,5 +683,8 @@ end
 
 end
 
+
 %Subfunction to remap IDs
-function id = remapid(id,map);  id = find(id == map);  end
+function id = remapid(id,map)
+    for s = 1:numel(id); id(s) = find(id(s) == map); end 
+end

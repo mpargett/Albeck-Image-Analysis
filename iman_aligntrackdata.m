@@ -1,8 +1,19 @@
 %IMAN_ALIGNTRACKDATA
-%   
+%   Align tracked coordinates to segmented centroids, to allocate raw
+%   masked data to tracks.  Used after both segmentation and tracking in
+%   the Celltracer procedure.
 %
-%FIXME - Write header
-
+%   [vc_out, vi, viv] = iman_aligntrackdata(coord, valcube)
+%       selects the nearest centroid from valcube for each tracked
+%       coordinate in coord.  Overlaps (centroids linked to two tracks) and
+%       out-of-range centroids (greater than estimated cell radius) are
+%       rejected.
+%
+%   Outputs:
+%   vc_out  - valcube array (see celltracer)
+%   vi      - raw indices aligned
+%   viv     - index of valid indices, vi(viv) yields valid indices from raw
+%               (input) valcube array
 
 
 
@@ -16,8 +27,11 @@ if strcmpi(coord,'version'); vc_out = 'v1.0'; return; end
 
 %Align tracked coordinates to nearest centroid for each time point
 vc_out = nan(ncells, ntime, nfield);     %Initialize output dataset
+%   Initialize coordinates as tracked estimates
+vc_out(:,:,end-2:end-1) = coord;
 for st = 1:size(coord,2)    %FOR each time point
-    vcc = nan(size(valcube{st},1),2);
+    %   Reshape by pre-allocating is faster than squeeze
+    vcc = nan(size(valcube{st},1),2);  
     %Get centroid coordinates from valcube
     vcc(:,:) =  valcube{st}(:,1,end-2:end-1);
     %Short circuit for empty fields
