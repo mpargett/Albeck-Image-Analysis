@@ -182,7 +182,7 @@ op.msk.fret = ip.bkmd.exp.FRET;     %Copy FRET channel names to op
 
 
 %% Main procedure
-[dao, GMD, dmx] = iman_celltracer(ip, op);f
+[dao, GMD, dmx] = iman_celltracer(ip, op);
 
 
 
