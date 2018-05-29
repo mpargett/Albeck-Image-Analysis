@@ -117,6 +117,7 @@ if  exist(infile,'file');
     fp = regexpi(infile,'^(?<dir>.*[\\/])(?<name>[^\\/]*)$', 'names');
 else  [fp.name,fp.dir] = uigetfile();
 end
+
 %   Processes file name
 fp = parse_target_file(fp);
 %   Store file path info
@@ -125,6 +126,11 @@ h.fp = fp;
 %Get XY information
 %   Load global data
 gf = load([fp.dir,fp.name,'Global.mat']);
+if ~exist(gf.p.fname,'file')
+    [tmp_name,tmp_dir] = uigetfile(); 
+    gf.p.fname = [tmp_dir,tmp_name];
+end
+
 %   Load Data Access Object for imagery
 h.xy.dao = iman_imageaccess(gf.p.fname);
 %   Set Channel and Z indices
