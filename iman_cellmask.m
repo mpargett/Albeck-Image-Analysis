@@ -145,10 +145,6 @@ end
 %Split out image channels (for indexing ease when masking)
 imin = num2cell( imin, [1,2] );
 
-%Get tracked labels
-lbl = nuclm( sub2ind(sz, round(m.yCoord), round(m.xCoord)) );
-nnuc = numel(lbl);  %Number of segmented coordinates
-
 %If nuclear masks were eroded in processing, re-dilate, accomodating
 %   desired extra erosion in final masks (op.msk.nrode)
 %   (Performed here, on label matrices, preserves cell identity)
@@ -201,6 +197,29 @@ end
 mask.nuc = logical(nuclm);  mask.cyt = logical(cytlm);
 
 
+%% Prepare label/mask indices to store channel values
+%Labels and images are expanded to vectors by masking of all elements
+%   (i.e. nuclei of cytoplasms) at once, then per-label values are
+%   aggregated and averaged (with tails trimmed).  This process improves
+%   speed over per-label masking on the whole image.
+%Collect label vectors
+lv.nuc = nuclm(mask.nuc);  lv.cyt = cytlm(mask.cyt);
+lvn = fieldnames(lv);  nlv = numel(lvn);       %Label names
+%Sort label vectors and determine indices bounding each label
+[lvs.nuc,lvsi.nuc] = sort(lv.nuc);  [lvs.cyt,lvsi.cyt] = sort(lv.cyt);
+
+%Pre-allocate lv bounding index vectors
+ind.nuc = [0; nan(lvs.nuc(end)-1,1); length(lvs.nuc)]; ind.cyt = ind.nuc;
+%Assemble bounding indices for label vectors
+for sl = 1:nlv  %For both Nuc and Cyt indices
+    %   Get bounding indices and number of labels incremented
+    dd = diff(lvs.(lvn{sl})); id = find(dd);  dd = dd(id);
+    %   Assign bounding with duplication where labels skipped
+    ind.(lvn{sl}) = [0; cell2mat(arrayfun(@(x,y)repmat(y,x,1), ...
+        dd, id, 'Un', 0)); length(lvs.(lvn{sl}))];
+end
+
+
 %% Calculate and fill outputs (the 'valcube' matrix)
 %Generate pre-average cross-channel ratio images (background subtracted)
 rim = cell(nrt,1);
@@ -211,34 +230,11 @@ for sr = 1:nrt
     rim{sr}( imin{op.msk.rt{sr}(1)} < 0 | imin{op.msk.rt{sr}(2)} <= 0 ) = NaN;
 end
 
-%Prepare label/mask indices to store channel values
-%Labels and images are expanded to vectors by masking of all elements
-%   (i.e. nuclei of cytoplasms) at once, then per-label values are
-%   aggregated and averaged (with tails trimmed).  This process improves
-%   speed over per-label masking on the whole image.
-%Collect label vectors
-lv.nuc = nuclm(mask.nuc);  lv.cyt = cytlm(mask.cyt);
-lvn = fieldnames(lv);  nlv = numel(lvn);       %Label names
-%Sort label vectors and determine indices bounding each label
-[lvs.nuc,lvsi.nuc] = sort(lv.nuc);  [lvs.cyt,lvsi.cyt] = sort(lv.cyt);
-ind.nuc = [0;find(diff(lvs.nuc));length(lvs.nuc)];
+%Get tracked labels
+lbl = nuclm( sub2ind(sz, round(m.yCoord), round(m.xCoord)) );
+nnuc = numel(lbl);  %Number of segmented coordinates
 
-%Inject empties into cytoplasm index list, as needed for proper matching
-%   Identify missing cytoplasm indices (lost in mask expansion)
-uni = unique(lvs.nuc);  uci = unique(lvs.cyt);
-%   Determine intersect (valid cyto labels)
-[~, ia] = intersect(uni,uci);
-%   Determine difference (missing cyto labels)
-injs = uni;  injs(ia) = [];
-%   Built cyto index list
-ind.cyt = [0;nan(nnuc,1)];  %Initialize with start index
-%   Fill with valid indices, including end index of last point
-ind.cyt(ia+1) = [find(diff(lvs.cyt));length(lvs.cyt)]; 
-%   Inject missing indices (iterative for sequential gaps)
-while ~isempty(injs)
-    ind.cyt(injs+1) = ind.cyt(injs);
-    injs = injs(isnan(ind.cyt(injs+1)));
-end
+% setdiff(uni, lbl)
 
 %   Initialize valcube
 valcube = nan(nnuc, 1, nlv*(nchan+nrt) + nagt + 3);
