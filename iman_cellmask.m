@@ -208,16 +208,16 @@ lvn = fieldnames(lv);  nlv = numel(lvn);       %Label names
 %Sort label vectors and determine indices bounding each label
 [lvs.nuc,lvsi.nuc] = sort(lv.nuc);  [lvs.cyt,lvsi.cyt] = sort(lv.cyt);
 
-%Pre-allocate lv bounding index vectors
-ind.nuc = [0; nan(lvs.nuc(end)-1,1); length(lvs.nuc)]; ind.cyt = ind.nuc;
 %Assemble bounding indices for label vectors
 for sl = 1:nlv  %For both Nuc and Cyt indices
     %   Get bounding indices and number of labels incremented
-    dd = diff(lvs.(lvn{sl})); id = find(dd);  dd = dd(id);
+    dd = diff([1;lvs.(lvn{sl})]); id = find(dd);  dd = dd(id);
     %   Assign bounding with duplication where labels skipped
     ind.(lvn{sl}) = [0; cell2mat(arrayfun(@(x,y)repmat(y,x,1), ...
-        dd, id, 'Un', 0)); length(lvs.(lvn{sl}))];
+        dd, id-1, 'Un', 0)); length(lvs.(lvn{sl}))];
 end
+%   Append ends for any lost cyto masks of highest label number
+ind.cyt(end+1:lvs.nuc(end)+1) = length(lvs.cyt);
 
 
 %% Calculate and fill outputs (the 'valcube' matrix)
