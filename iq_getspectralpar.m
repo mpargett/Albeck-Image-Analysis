@@ -139,6 +139,9 @@ for s = find(f_use)'
         .*[dfilt.r{ind_wl, fmatch.(ftn{s,1}) & ftype.Mr}];
 end
 
+%Include custom Filter definitions
+iqp = add_custom_filters(iqp, dfilt.r, ind_wl, fmatch, ftype);
+
 %Remove all NaNs, replacing with zeros
 iqp = zeronan(iqp);
 
@@ -152,6 +155,17 @@ if nargout == 0;	save('iq_spectral', 'iqp');    end
 
 end
 
+
+%Sub-Function to add custom filters
+function iqp = add_custom_filters(iqp, r, ind_wl, fmatch, ftype)
+%Downstairs scope CFP cube, without Excitation filter
+cf = 'Filter_CFPa';     fm = 'Filter_CFP';
+    %Excitation side
+    iqp.(cf).ex = (1-[r{ind_wl, fmatch.(fm) & ftype.Mr}]);
+    %Emission side
+    iqp.(cf).em = [r{ind_wl, fmatch.(fm) & ftype.Em}]...
+        .*[r{ind_wl, fmatch.(fm) & ftype.Mr}];
+end
 
 %Sub-Function to set NaN to zero
 function out = zeronan(in)
