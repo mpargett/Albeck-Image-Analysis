@@ -271,8 +271,8 @@ im = zeros(GMD.cam.PixNumY, GMD.cam.PixNumX, nc);
 
 
 %% ----- Sequentially process each XY position desired -----
-bki = cell(nxy,1);  hi = 1:nxy;     %Initialize background variables
-t_tot = tic;  t_perxy = [];  emsg = [];  errid = 0;  nrun = 0; ctrans = [];
+bki = cell(nxy,1);  hi = 1:nxy; nrun = 0; %Initialize background variables
+t_tot=tic;  t_perxy=[];  emsg=[];  errid=0; erfname=[];  ctrans=[];
 for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
     t_xy = tic;         nrun = nrun + 1;
     try  %Protect other xy runs from failures
@@ -496,14 +496,16 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
         msg = sprintf(['Processing FAILED on XY ', ...
             '%d (%d/%d).'], op.xypos(h), h, nxy);  disp(dmsg);  disp(msg);
         disp(ME.message);  emsg = []; msg = [];
+        
         %Produce an Error Report and proceed to the next XY position
-        MElog{errid}(1:2) = { msg, [ME.identifier, ' - ', ME.message] }; %#ok<AGROW>
+        MElog(1:2) = { msg, [ME.identifier, ' - ', ME.message] };
         for se = 1:length(ME.stack)
-            MElog{errid}(2 + se) =   {sprintf('%s  - Line %d', ...
+            MElog(2 + se) =   {sprintf('%s  - Line %d', ...
                 ME.stack(se).file, ME.stack(se).line) };  
-        end
-        %Append a structure with relevant info to the end of MElog
-        MElog{errid}{end} = struct('h',h); %#ok<AGROW>
+        end        
+        %Update running error file
+        erfname = erf_update(errid, erfname, MElog, p, op, h);
+        
         continue
     end
     
@@ -518,25 +520,6 @@ if vv < 8.2;    if matlabpool('size') > 0;    matlabpool close;   end
 else            delete(gcp('nocreate'));
 end
 
-%Error recording: Generate logfile for any errors encountered
-if errid > 0
-    %Create an error log file
-    ct = now;    erfname = ['CellTrace_ErrorLog_',datestr(ct,30),'.txt'];
-    erfid = fopen(erfname, 'w+');  %Open log file for writing
-    fprintf(erfid, '%s\n%s\n\n', ['Error Log File for iman_celltrace_main,',...
-        ' run ', datestr(ct, 31), ' for file: '], p.fname);
-    %Write to file all error information in series
-    for se = 1:errid
-        fprintf(erfid, '\nError %d\n', se);         %New title line
-        fprintf(erfid, '\nIn XY Position %d\n', ...
-            op.xypos(MElog{se}{end}.h));          %XY Pos
-        for sse = 1 : (length(MElog{se}) - 1)    %Print error messages
-            fprintf(erfid, '%s\n', MElog{se}{sse});
-        end
-    end
-    fclose(erfid);  %Close error file to finalize
-end
-
 end
 
 
@@ -544,17 +527,44 @@ end
 
 %% SUBFUNCTIONS
 
+% --- Update error log file ---
+function erfname = erf_update(errid, erfname, MElog, p, op, h)
+    %Open or Create the Error File
+    if errid == 1 || ~exist(erfname,'file') %IF this is the first error
+        ct = now;    %Get current time
+        %Start a new error file, first defining the name
+        erfname = ['CellTrace_ErrorLog_',datestr(ct,30),'.txt'];
+        %Open log file for writing
+        erfid = fopen(erfname, 'a+');      
+        %Print title line to file
+        fprintf(erfid, '%s\n%s\n\n', ['Error Log File for iman_cell',...
+            'tracer, run ', datestr(ct, 31), ' for file: '], p.fname);
+    else %IF a file already exists, open it
+        erfid = fopen(erfname, 'a+');  %Open log file for writing
+    end    
+
+    %Write to file all error information in series
+    fprintf(erfid, '\nError %d\n', errid);         %New title line
+    fprintf(erfid, 'In XY Position %d\n', ...
+        op.xypos(h));          %XY Pos
+    for sse = 1 : length(MElog)   %Print error messages
+        fprintf(erfid, '%s\n', MElog{sse});
+    end
+    fclose(erfid);  %Close error file to finalize
+end
+
+
 % --- Timer display update function ---
 function [msg, emsg] = subf_update_timer(t_el, t_rem, msg, emsg)
-fprintf(repmat('\b', 1, numel(msg)  + ~isempty(msg) + ...
-    numel(emsg) + ~isempty(emsg)  ));
-msg = [];
-%IF t_rem not yet defined, skip time estimation
-if isempty(t_rem);      return;     end
-emsg = sprintf(['Time elapsed: %dh %dm.  Estimate time remaining: ',...
-    '%dh %dm.'], floor(t_el/60),  round(mod(t_el,60)), ...
-    floor(t_rem/60), round(mod(t_rem,60))  );
-disp(emsg);
+    fprintf(repmat('\b', 1, numel(msg)  + ~isempty(msg) + ...
+        numel(emsg) + ~isempty(emsg)  ));
+    msg = [];
+    %IF t_rem not yet defined, skip time estimation
+    if isempty(t_rem);      return;     end
+    emsg = sprintf(['Time elapsed: %dh %dm.  Estimate time remaining: ',...
+        '%dh %dm.'], floor(t_el/60),  round(mod(t_el,60)), ...
+        floor(t_rem/60), round(mod(t_rem,60))  );
+    disp(emsg);
 end
 
 

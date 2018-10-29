@@ -217,8 +217,10 @@ for sl = 1:nlv  %For both Nuc and Cyt indices
         dd, id-1, 'Un', 0)); length(lvs.(lvn{sl}))];
 end
 %   Append ends for any lost cyto masks of highest label number
-ind.cyt(end+1:lvs.nuc(end)+1) = length(lvs.cyt);
-
+%       Only if necessary (robust to no masks)
+if length(ind.cyt) < length(ind.nuc)
+    ind.cyt(end+1:lvs.nuc(end)+1) = length(lvs.cyt);
+end
 
 %% Calculate and fill outputs (the 'valcube' matrix)
 %Generate pre-average cross-channel ratio images (background subtracted)
@@ -233,8 +235,6 @@ end
 %Get tracked labels
 lbl = nuclm( sub2ind(sz, round(m.yCoord), round(m.xCoord)) );
 nnuc = numel(lbl);  %Number of segmented coordinates
-
-% setdiff(uni, lbl)
 
 %   Initialize valcube
 valcube = nan(nnuc, 1, nlv*(nchan+nrt) + nagt + 3);
