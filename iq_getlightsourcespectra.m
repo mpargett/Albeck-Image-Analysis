@@ -23,6 +23,7 @@ if exist('lsn','var') && ~isempty(lsn)
     end
     %   Sanitize source name
     lsn = regexprep(lsn, lsnames(:,2), lsnames(:,1), 'ignorecase');
+    if iscell(lsn) && numel(lsn) == 1; lsn = lsn{1}; end %Check input
     %   Restrict info to the relevent Light Source
     nuse = ~cellfun(@isempty, regexpi(lsn, lsnames(:,2)));
     lsnames = lsnames(nuse,:);
