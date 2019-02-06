@@ -103,9 +103,16 @@ end  %FOR Each Series
 
 %% Reorder time values to fix misalignment
 allt = unique(cat(1, out.time));
-allt = num2cell(reshape(allt, nser, r.getSizeT),2);
-[out.time] = deal(allt{:});
-
+%   Check validity of time series
+if numel(allt) == nser*r.getSizeT
+    %IF size adds up, re-order time series and return vector
+    allt = num2cell(reshape(allt, nser, r.getSizeT),2);
+    [out.time] = deal(allt{:});
+else
+    %If BAD, may have non-unique values, etc.  Warn and return raw values
+    warning('IMAN:ND2', ['Time Stamps in ND2 file appear corrupt. ',...
+        'Storing potentially corrupt data in the .time field.']);
+end
 
 end
 
