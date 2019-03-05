@@ -157,14 +157,14 @@ for s = 1:numel(p.frm)
     %   Plot linking search regions
     if subp; ah = subplot(1,2,1); end
     if p.plotlinks
-        plot_linking(ah, d.imo(p.frm(s)).im, ...
+        plot_linking(ah, d.imo(p.frm(s)).im(:,:,op.seg.chan(1)), ...
             d.ki((p.frm(s)-1):p.frm(s)), p.frm(s), pp);
     end
     
     %   Plot gap closing search regions
     if subp; ah = subplot(1,2,2); end
     if p.plotgaps
-        plot_gapclosing(ah, d.imo(p.frm(s)).im, d.ptrk, ...
+        plot_gapclosing(ah, d.imo(p.frm(s)).im(:,:,op.seg.chan(1)), d.ptrk, ...
             smxy{p.frm(s)}, p.frm(s), pp);
     end
     
