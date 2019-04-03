@@ -30,6 +30,7 @@ function [r, out, p] = bfopen_custom(in, varargin)
 p.all = false;  %Extract and return all images
 % p.memopath = '\\cloud.mcb.ucdavis.edu\albeck_lab\imageData\bf_memo';
 p.memopath = [];
+p.badtimes = false;
 
 %Input option pair parsing:
 nin = length(varargin);     %Check for even number of add'l inputs
@@ -108,10 +109,8 @@ if numel(allt) == nser*r.getSizeT
     %IF size adds up, re-order time series and return vector
     allt = num2cell(reshape(allt, nser, r.getSizeT),2);
     [out.time] = deal(allt{:});
-else
+else p.badtimes = true;
     %If BAD, may have non-unique values, etc.  Warn and return raw values
-    warning('IMAN:ND2', ['Time Stamps in ND2 file appear corrupt. ',...
-        'Storing potentially corrupt data in the .time field.']);
 end
 
 end

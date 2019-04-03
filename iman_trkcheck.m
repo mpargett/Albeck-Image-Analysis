@@ -27,9 +27,9 @@
 %   provide an empty d (d = []). 
 %
 %   Plotting parameters may be provided as Name/Value pairs after the 3rd
-%   input (d).  They include:
+%   input (d). Parameter names are case sensitive!  They include:
 %   
-%   xy      -   "XY" index to process and plot.
+%   xy      -   The position ("xy") index to process and plot.
 %   t       -   Time indices to process (must be long enough to track)
 %   starts  -   Logical, set TRUE to plot gap closing for new track starts.
 %                   Set FALSE to plot for track ends (merges).
@@ -76,7 +76,7 @@ end
 if ~exist('d','var') || isempty(d)
     pst = [];
     for st = 1:numel(p.t)
-        [pst, d.imo(st)] = iman_segcheck(ip, op, 't',p.t(st), 'xy',1, ...
+        [pst, d.imo(st)] = iman_segcheck(ip, op, 't',p.t(st), 'xy',p.xy, ...
             'pastinfo',pst, 'display', false);
     end
     d.GMD = pst.GMD; %Retain GMD for any short circuits
