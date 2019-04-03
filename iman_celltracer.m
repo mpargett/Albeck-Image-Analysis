@@ -198,6 +198,11 @@ end
 msg = sprintf(['Loading Data Access Object (DAO). ',...
     'Start time is: ', datestr(now, 'mm/dd HH:MM PM')]);    disp(msg);
 dao = iman_imageaccess(p.fname, p.indsz);   isTS = dao.info.ThreadSafe; 
+if dao.info.rp.badtimes
+    %Print warning that time stamps may be bad and are left raw
+    warning('IMAN:ND2', ['Time Stamps in ND2 file appear corrupt. ',...
+        'Storing potentially corrupt data in the .time field.']);
+end
 if ~isTS; warning('off', 'MATLAB:Java:ConvertFromOpaque'); end
 msg = sprintf(['DAO loaded. ', datestr(now, 'mm/dd HH:MM PM')]);
 disp(msg); msg = [];   %Clear msg to prevent partial erasing on next update
