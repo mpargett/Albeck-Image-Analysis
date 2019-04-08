@@ -31,10 +31,11 @@
 %       nth         -Number of thresholds to use for segmentation
 %
 
+%Updated 4.08.19 to pass shape metrics. MP
 
 function [movieInfo, enuc] = iman_cellid(im, pin, bkg)
 %Version check provision
-if strcmpi(im,'version'); movieInfo = 'v2.1'; return; end
+if strcmpi(im,'version'); movieInfo = 'v2.2'; return; end
 
 %% Operation parameters
 %Default parameters
@@ -81,7 +82,6 @@ otim_fore = imerode(otim > otim_bkg.*(bkg_rat), st1);   %Foreground mask
 if nnz(~otim_fore) > 3;  bkvar = var(otim(~otim_fore));  
 else bkvar = 0; end
 
-
 %% Image filtering (used for )
 %Get gradient magnitude image
 %   Filter out background by setting it to uniform level
@@ -116,6 +116,8 @@ else %IF nuclear segmentation, perform scaling very locally
     if p.localscale; stim = tstim./imdilate(stim,strel('disk',2*mflt)); end
 end
 
+%Prepare "high" value for No Conflict Morph Operations
+hm = 10*ceil(max(stim(:)));
 
 %% Image thresholding search
 %Define thresholds at linearly spaced quantiles
@@ -123,21 +125,23 @@ thresholds = prctile(stim(otim_fore), linspace(90, 5, p.nth) );
 clear otim_fore;
 
 %FOR each threshold, evalute appearance of nucleus-like shapes
-enuc = inf(size(stim)); 
+enuc = zeros(size(stim)); ndat = nan(1000,12);  mid = 0;
 for s = 1:length(thresholds)
     %Threshold the gradient image, making a temporary image (tim)
     tim = stim > thresholds(s); %Binary, based on threshold value
     
     %Erode and dilate to eliminate salt noise in binary
     tim = bwlabel(imdilate(imerode(tim, st1),st1));
+    %   Remove (large) high background region from cyto segmentation
+    if p.cyt && nnz(tim==1) > 10*maxNucArea;  tim(tim==1) = 0;  end
     %Dilate to remove holes AFTER labeling, to prevent region joining
-    tim = noConMop(noConMop(tim, @imdilate, st1), @imerode, st1);
+    tim = noConMop(noConMop(tim, @imdilate, st1, hm), @imerode, st1, hm);
     %IF extra nuclear erosion is called, perform now
     if p.nrode > 0;  tim = imerode(tim, st2);   end
     
     %Get properties of each region in image (Area, Perimeter, ...)
-    S = regionprops(tim, 'Area', 'Eccentricity', ...
-        'Extent', 'Orientation', 'PixelList', 'PixelIdxList',...
+    S = regionprops(tim, 'Centroid', 'Area', 'Eccentricity', ...
+        'Extent', 'Orientation', 'PixelIdxList',...
         'MajorAxisLength', 'MinorAxisLength');
     nucArea  = cat(1,S.Area);           %Vector of Areas
     nucOr  = cat(1,S.Orientation).*pi./180; %Vector of Orientations  
@@ -156,23 +160,23 @@ for s = 1:length(thresholds)
         cat(1,S.Eccentricity) < p.maxEcc & ...
         nucExt > p.Extent(1) & nucExt < p.Extent(2);
     if ~any(scorePass); continue; end %Short circuit if all fail
-    sp = find(scorePass)';  keeper = true(size(sp));
+    sp = find(scorePass)';
     
     %Evaluate mask quality metrics   
     %----------------------------------------------------------------------
+    %   Remove Failing regions from target image before re-segmentation
+    tim(cat(1,S(~scorePass).PixelIdxList)) = 0;
     %Get outer boundary around each mask
-    dtim = noConMop(tim, @imdilate, st0); %Expand masks by minimum amount
+    dtim = noConMop(tim, @imdilate, st0, hm); %Expand masks by minimum amount
     dtim(logical(tim)) = 0; %Remove original mask to give boundaries
     %   Get properties for expanded boundaries
     S2 = regionprops(dtim, 'Area', 'PixelIdxList', 'PixelList', 'Centroid');
     
     %Boundary gradient: Maximize the gradient on the boundary
-    %   Get average boundary gradient, scale by peak value and subtract
-    %       from 1 to get cost. (Actually rescaled to map 5% of peak to 1
-    %       "very bad" and 25% "good" to 0) 
-    mq_grad = arrayfun(@(x,y)1 - 5*( mean(gim(x.PixelIdxList)) ...
-                ./ max(otim(y.PixelIdxList)) - 0.05 ), S2(sp), S(sp));
-        mq_grad(mq_grad < 0) = 0;  %Avoid cost on negative values
+    %   Get average boundary gradient, scale by peak value.
+    %   (Later rescaled to map 5% of peak to 1 "bad" and 25% "good" to 0) 
+    mq_grad = arrayfun(@(x,y)mean(gim(x.PixelIdxList)) ...
+                ./ max(otim(y.PixelIdxList)), S2(sp), S(sp));
     
     %Smoothness: Minimize concave deviations on boundary
     %   Calculate the convex hull area per region (by removal)
@@ -180,8 +184,8 @@ for s = 1:length(thresholds)
         cha = arrayfun(@(x)sub_chull(x.PixelList, x.Centroid), S2(sp)) ...
             - cat(1,S2(sp).Area)/2;
     %   Scale smoothness cost by convex hull area
-    %       Pre-weighted for 1/4 of area being concave to be "very bad"
-    mq_smooth = 4*(cha - nucArea(sp))./cha;
+    %       Later weighted for 1/4 of area being concave to be "very bad"
+    mq_smooth = nucArea(sp)./cha;
      
     %Internal variance: Minimize CV (std/mean) of nuc
     %       Neglect typical variance of background (~dark noise)
@@ -189,51 +193,72 @@ for s = 1:length(thresholds)
          ./mean(otim(x.PixelIdxList)), S(sp));
     mq_cv = real(mq_cv);  %Imaginaries arise if var less than bkvar
     
-    %Exclude regions based on quality metric bounds (secondary filter)
-    keeper(mq_smooth > p.maxSmooth) = false;
-    
     %Aggregate quality metrics (weighted sum of squares)
-    %   Squaring weights improvement of a bad metric over a good one
-    mqm = ([mq_grad, mq_smooth, mq_cv].^2)*mqw;
+    %   Prepare nuclear metric array (to store metrics for output)
+    nma = [mq_grad, mq_smooth, mq_cv, nan(size(mq_cv))]; 
+    %   Now scale and constrain quality metrics in aggregation
+        mq_grad = 1 - 5*(mq_grad - 0.05); %Invert and scale 5% - 25%
+        mq_grad(mq_grad < 0) = 0;  %Avoid cost on negative values
+        mq_smooth = 4*(1-mq_smooth); %Scale for 1/4 concavity
+        
+    %   Append weighted quality (squaring weights improvement of a bad 
+    %       metric over a good one)
+    nma(:,end) = ([mq_grad, mq_smooth, mq_cv].^2)*mqw;
+    
+    %Exclude regions based on quality metric bounds (secondary filter)
+    keeper = mq_smooth <= p.maxSmooth;
+    %   Apply secondary filter on smoothness
+    sp = sp(keeper);  nma = nma(keeper,:); 
     %----------------------------------------------------------------------
        
+    %Assemble nuclear metric array for keepers
+    nma = [cat(1,S(sp).Centroid), ...   %Centroid (X,Y)
+        arrayfun(@(x)sum(otim(x.PixelIdxList)), S(sp)), ... %Sum Amplitude
+        arrayfun(@(x)std(otim(x.PixelIdxList)), S(sp)), ... %Amp St Dev
+        nucArea(sp), ...                %Nuclear Area
+        cat(1,S(sp).Eccentricity), ...  %Eccentricity ()
+        nucOr(sp), ...                  %Orientation (radians)
+        nucExt(sp), ...                 %Adjusted Nuclear Extent
+        nma];                           %#ok<AGROW>         %Quality metrics
+    
     %Check mqm against past, and store passing spots with better mqm
     %   Can safely overwrite, new masks will always be larger
-    for ss = 1:numel(sp);
-        if keeper(ss) && mqm(ss) < min(enuc(S(sp(ss)).PixelIdxList))
-            enuc(S(sp(ss)).PixelIdxList) = mqm(ss); 
-        end
+    for ss = 1:numel(sp); 
+            %Identify cells previously in the segmentation
+            cid = unique(enuc(S(sp(ss)).PixelIdxList)); 
+                cid = cid(cid>0); %Remove zero (expected)
+            %Check that new mask is better than all previous masks
+            if isempty(cid); mid = mid + 1;
+                %Store new mask
+                enuc(S(sp(ss)).PixelIdxList) = mid; %Add to label matrix
+                ndat(mid,:) = nma(ss,:);            %Add to nucleus data
+            elseif nma(ss,end) < min(ndat(cid,end));
+                %Overwrite previous mask(s)
+                enuc(S(sp(ss)).PixelIdxList) = cid(1); %Label matrix
+                ndat(cid(1),:) = nma(ss,:);            %Nucleus data
+                ndat(cid(2:end),:) = nan;    %Invalidate covered "cell"
+            end
     end    
+    
+    %Append new space for data, as needed (unlikely in most cases)
+    if mid > (size(ndat,1) - 100); ndat = cat(1, ndat, nan(1000,12)); end
+    
 end
-
-%Retain quality metric values per mask
-qmask = enuc;
-%Restore nuclear size from hole removal 
-%   (does not restore full size if p.nrode > 0)
-enuc = imdilate(bwlabel(~isinf(enuc)), st1);
+ndat = ndat(~any(isnan(ndat),2), :);  %Remove any unused entries
 
 
 %% Store estimated nuclei data
-%Re-segment stored nuclei spot (re-orders spots)
-S = regionprops(enuc, 'Centroid', 'Area', 'PixelIdxList');
-nCtr = cat(1, S.Centroid);  nAre = cat(1, S.Area);  
-im_op = im(:,:,p.chan);
-nAmp = arrayfun(@(x)sum(im_op(x.PixelIdxList)), S);
-nAmpStd = arrayfun(@(x)std(im_op(x.PixelIdxList)),S);
-
-%Store coordinates IF any spots were found
-if ~isempty(nCtr);
-    movieInfo.xCoord = nCtr(:,1);
-    movieInfo.yCoord = nCtr(:,2);
-    movieInfo.amp = nAmp(:,1);
-    movieInfo.ampstd = nAmpStd(:,1);
-    movieInfo.are = nAre(:,1);
-    movieInfo.qual = qmask(sub2ind(size(qmask), round(nCtr(:,2)), round(nCtr(:,1))));
-else  %Store empty output if no spots found
-    movieInfo = struct('xCoord',[],'yCoord',[],'amp',[], 'ampstd', [],...
-        'are',[], 'qual', []);
+%Define nuclear data fields (keep matched with nma definitions above)
+nms = {'xCoord', 'yCoord', 'amp', 'ampstd', 'are', ...
+        'nEcc', 'nOrient', 'nExt', 'bgrad', 'nSold', 'nCV'};
+    
+if mid > 0; %Check if any cells were found, and fill output structure
+    movieInfo = cell2struct(num2cell(ndat(:,1:end-1),1), nms, 2);
+else    %Store empty output if no cells found
+    movieInfo = cell2struct(cell(size(nms)), nms, 2);
 end
-% 
+
+
 end
 
 
@@ -264,16 +289,15 @@ end
 
 
 %% No conflict grayscale dilation/erosion
-function im = noConMop(im, mop, stl)
-%Prepare inverted image (for reverse operation)
-iim = im;                   iim(iim == 0) = Inf; 
+function im = noConMop(im, mop, stl, hm)
 %Perform primary operation (dilation or erosion)
-im = mop(im, stl);
+iim = mop(im, stl);
 %Repeat with inverted label values to observe overlaps
+im = im + hm.*(im == 0);  %Prepare inverted image (for reverse operation)
 %   Inverted operation expands labels in the opposite direction
-iim = -mop(-iim, stl);      iim = iim.*(iim ~= Inf);
+im = -mop(-im, stl);      im = im.*(im < hm(1));
 %Remove the overlaps from both boundaries to avoid joining
-im = im.*(iim == im);
+im = iim.*(iim == im);
 end
 
 %% Residual notes
