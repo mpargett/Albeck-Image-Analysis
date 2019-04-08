@@ -132,11 +132,21 @@ ind_wl = ind_wl + ( find([dfilt.r{ind_wl+1:end,1}] == wl_lo) : ...
 %Finally, take spectral data for each, stored by uniform name
 for s = find(f_use)'
     %Mirror refelcts/transmits light dependent on wavelength.  
+    %   Get availability of spectral data per name
+    exm = fmatch.(ftn{s,1}) & ftype.Ex;
+    emm = fmatch.(ftn{s,1}) & ftype.Em;
+    mrm = fmatch.(ftn{s,1}) & ftype.Mr;
     %Take product with Mirror for Em, and with 1-Mirror for Ex.
-    iqp.(ftn{s,1}).ex = [dfilt.r{ind_wl, fmatch.(ftn{s,1}) & ftype.Ex}]...
-        .*(1-[dfilt.r{ind_wl, fmatch.(ftn{s,1}) & ftype.Mr}]);
-    iqp.(ftn{s,1}).em = [dfilt.r{ind_wl, fmatch.(ftn{s,1}) & ftype.Em}]...
-        .*[dfilt.r{ind_wl, fmatch.(ftn{s,1}) & ftype.Mr}];
+    if any(mrm)
+        if any(exm)
+            iqp.(ftn{s,1}).ex = [dfilt.r{ind_wl, exm}]...
+                .*(1-[dfilt.r{ind_wl, mrm}]);
+        end
+        if any(emm)
+            iqp.(ftn{s,1}).em = [dfilt.r{ind_wl, emm}]...
+                .*[dfilt.r{ind_wl, mrm}];
+        end
+    end
 end
 
 %Include custom Filter definitions
@@ -162,6 +172,15 @@ function iqp = add_custom_filters(iqp, r, ind_wl, fmatch, ftype)
 cf = 'Filter_CFPa';     fm = 'Filter_CFP';
     %Excitation side
     iqp.(cf).ex = (1-[r{ind_wl, fmatch.(fm) & ftype.Mr}]);
+    %Emission side
+    iqp.(cf).em = [r{ind_wl, fmatch.(fm) & ftype.Em}]...
+        .*[r{ind_wl, fmatch.(fm) & ftype.Mr}];
+
+%Cherry3 filter (different excitation filter from Cherry2)
+cf = 'Filter_Cherry3';     fm = 'Filter_Cherry2'; fmx = 'Filter_Cherry3';
+    %Excitation side
+    iqp.(cf).ex = [r{ind_wl, fmatch.(fmx) & ftype.Ex}]...
+        .*(1-[r{ind_wl, fmatch.(fm) & ftype.Mr}]);
     %Emission side
     iqp.(cf).em = [r{ind_wl, fmatch.(fm) & ftype.Em}]...
         .*[r{ind_wl, fmatch.(fm) & ftype.Mr}];
