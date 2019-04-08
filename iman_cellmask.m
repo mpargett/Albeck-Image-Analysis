@@ -41,10 +41,11 @@
 %Updated 2.26.17 to improve indexing into image via masks for speed.
 %Updated 9.15.17 to include alternate aggregation functions. MP
 %Updated 4.19.18 with cyto mask refinement. MP
+%Updated 4.08.19 to pass shape metrics. MP
 
 function [valcube, mask] = iman_cellmask(imin, m, op, nuclm, bkg)
 %Version check provision
-if strcmpi(imin,'version'); valcube = 'v2.3'; return; end
+if strcmpi(imin,'version'); valcube = 'v2.4'; return; end
 
 %% Operation parameters
 if ~exist('bkg','var'); bkg = []; end
@@ -52,7 +53,8 @@ ncgap  = round((0.05*op.seg.maxD)) + 2;  %Size of gap between nuc mask and cyto
 ncring = round((0.05*op.seg.maxD)) + 1;  %Desired cyto mask thickness
 
 %Backward compatibility for scripts missing parameters
-bc = {'nfilt',false; 'cfilt',false; 'nrode',0; 'cgap',0; 'cwidth',0};
+bc = {'nfilt',false; 'cfilt',false; 'nrode',0; 'cgap',0; 'cwidth',0; ...
+    'appendshape',false};
 for s = 1:size(bc,1)
     if ~isfield(op.msk, bc{s,1}); op.msk.(bc{s,1}) = bc{s,2}; end
 end
@@ -123,7 +125,12 @@ if isempty(m)
         valcube = cat(1, valcube, ca{:});
     end
     %Standard appendices -      coordinates    nuc area
-    valcube(end + (1:3)) = {'XCoord', 'YCoord', 'nArea'};
+    valcube(end + (1:2)) = {'XCoord', 'YCoord'};
+    %Shape metric appendices
+    if op.msk.appendshape
+    valcube(end + (1:6)) = {'nArea', 'nEccentricity',...
+        'nOrientation', 'nExtent', 'nSolidity', 'nCV'};
+    end
     valcube{end + 1} = ['Note: All values are background subtracted.  ',...
         'Cross-channel ratios are taken prior to averaging.'];
     
@@ -232,12 +239,12 @@ for sr = 1:nrt
     rim{sr}( imin{op.msk.rt{sr}(1)} < 0 | imin{op.msk.rt{sr}(2)} <= 0 ) = NaN;
 end
 
-%Get tracked labels
-lbl = nuclm( sub2ind(sz, round(m.yCoord), round(m.xCoord)) );
+%Get labels (label value is 1st dim index of m, per iman_cellid)
+lbl = unique(nuclm(:)); lbl = lbl(lbl>0);
 nnuc = numel(lbl);  %Number of segmented coordinates
 
 %   Initialize valcube
-valcube = nan(nnuc, 1, nlv*(nchan+nrt) + nagt + 3);
+valcube = nan(nnuc, 1, nlv*(nchan+nrt) + nagt + 2 + 6*op.msk.appendshape);
 lblidx = find(lbl)';        %Pre-define index of valid labels
 %Fill standard channels
 for sc = 1:nchan
@@ -283,8 +290,13 @@ for sa = 1:nagg
     end
 end
 
-%Store coordinate values, appended
-valcube(:,:, vcs + (1:3)) = cat(3, m.xCoord, m.yCoord, m.are);
+%Store coordinate values and nuclear metrics, appended
+valcube(:,:, vcs + (1:2)) = cat(3, m.xCoord, m.yCoord);
+%Append shape metrics if called
+if op.msk.appendshape
+    valcube(:,:, vcs + (3:8)) = cat(3, m.are, m.nEcc, m.nOrient, ...
+        m.nExt, m.nSold, m.nCV);
+end
 
 %Pack mask matrices for compression
 mask.nuc = bwpack(mask.nuc);  mask.cyt = bwpack(mask.cyt);
