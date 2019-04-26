@@ -499,7 +499,7 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
         %Display an error message
         dmsg = sprintf(repmat('\b', 1, numel(msg)+numel(emsg)+2)); 
         msg = sprintf(['Processing FAILED on XY ', ...
-            '%d (%d/%d), Time Point %d.'], op.xypos(h), h, nxy, st);  
+            '%d (%d/%d).'], op.xypos(h), h, nxy);  
         disp(dmsg);  disp(msg);
         disp(ME.message);  emsg = []; msg = [];
         
