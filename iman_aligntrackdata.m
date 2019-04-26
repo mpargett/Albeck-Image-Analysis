@@ -15,25 +15,34 @@
 %   viv     - index of valid indices, vi(viv) yields valid indices from raw
 %               (input) valcube array
 
+%MP: Added input of vcorder to get channel index of XY coords
 
-
-function [vc_out, vi, viv] = iman_aligntrackdata(coord, valcube)
+function [vc_out, vi, viv] = iman_aligntrackdata(coord, valcube, vcorder)
 %Version check provision
-if strcmpi(coord,'version'); vc_out = 'v1.0'; return; end
+if strcmpi(coord,'version'); vc_out = 'v2.0'; return; end
 
 %% Curate input coordinates
 %Get scale of dataset
 [ncells, ntime, ~] = size(coord);  nfield = size(valcube{1}, 3);
 
+%Get position of Coordinates in Valcube
+if iscell(vcorder) && ischar(vcorder{1})
+    %Get X and Y channel indices
+    xyi = [ find(strcmpi(vcorder, 'XCoord')),... %X index
+            find(strcmpi(vcorder, 'YCoord')) ];  %Y index 
+elseif isnumeric(vcorder) && numel(vcorder == 2)
+    xyi = squeeze(vcorder); %Use 'vcorder' as raw indices
+end
+
 %Align tracked coordinates to nearest centroid for each time point
 vc_out = nan(ncells, ntime, nfield);     %Initialize output dataset
 %   Initialize coordinates as tracked estimates
-vc_out(:,:,end-2:end-1) = coord;
+vc_out(:,:,xyi) = coord;
 for st = 1:size(coord,2)    %FOR each time point
     %   Reshape by pre-allocating is faster than squeeze
     vcc = nan(size(valcube{st},1),2);  
     %Get centroid coordinates from valcube
-    vcc(:,:) =  valcube{st}(:,1,end-2:end-1);
+    vcc(:,:) =  valcube{st}(:,1,xyi);
     %Short circuit for empty fields
     if all(any(isnan(vcc),2));  continue; 	end
     %Get estimate radius of cell (from segmentation)
