@@ -136,7 +136,7 @@ if strcmpi(p,'version')
     %Return structure detailing compatible versions of required code
     GMD = struct('imageaccess',1, 'getframe',1, 'getmeta',1, ...
         'cellid',2, 'cellmask',2, 'xyshift',2, 'utrack_call',2, ...
-        'trackcoords',2, 'aligntrackdata',1, 'unmix',2, 'naming',1, ...
+        'trackcoords',2, 'aligntrackdata',2, 'unmix',2, 'naming',1, ...
         'refine',1);
     return; 
 end
@@ -265,7 +265,7 @@ altXYi = NaN(1,nxy); altXYi(use_altXY) = xyrev([p.bkg(use_altXY).altxy]);
 
 %Establish data output sequence (to be stored for reference)
 vcorder = iman_cellmask([GMD.cam.PixNumY, GMD.cam.PixNumX, nc], ...
-    [], op, []); %#ok<NASGU>
+    [], op, []);
     
 %Evaluate geometric objective-based intensity correction (per metadata)
 im = zeros(GMD.cam.PixNumY, GMD.cam.PixNumX, nc);
@@ -471,7 +471,7 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
         
         %Align data (from masked regions) to tracked coordinates
         if op.msk.saverawvals; vcraw = valcube; else vcraw = []; end %#ok<NASGU>
-        valcube = iman_aligntrackdata(coord, valcube); %#ok<NASGU>
+        valcube = iman_aligntrackdata(coord, valcube, vcorder); %#ok<NASGU>
         
             % - Display the adjustments for frame shift, as applicable -
             if op.disp.shifts && ~isempty(p.xyshift) && ~isempty(p.xyshift.frame)
@@ -499,7 +499,8 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
         %Display an error message
         dmsg = sprintf(repmat('\b', 1, numel(msg)+numel(emsg)+2)); 
         msg = sprintf(['Processing FAILED on XY ', ...
-            '%d (%d/%d).'], op.xypos(h), h, nxy);  disp(dmsg);  disp(msg);
+            '%d (%d/%d), Time Point %d.'], op.xypos(h), h, nxy, st);  
+        disp(dmsg);  disp(msg);
         disp(ME.message);  emsg = []; msg = [];
         
         %Produce an Error Report and proceed to the next XY position

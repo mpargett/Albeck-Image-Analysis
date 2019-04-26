@@ -228,15 +228,33 @@ for s = 1:length(thresholds)
             cid = unique(enuc(S(sp(ss)).PixelIdxList)); 
                 cid = cid(cid>0); %Remove zero (expected)
             %Check that new mask is better than all previous masks
-            if isempty(cid); mid = mid + 1;
+            if isempty(cid); mid = mid + 1; %IF no previous mask present
                 %Store new mask
                 enuc(S(sp(ss)).PixelIdxList) = mid; %Add to label matrix
                 ndat(mid,:) = nma(ss,:);            %Add to nucleus data
-            elseif nma(ss,end) < min(ndat(cid,end));
+            elseif nma(ss,end) < min(ndat(cid,end)); %IF better than prev.
                 %Overwrite previous mask(s)
                 enuc(S(sp(ss)).PixelIdxList) = cid(1); %Label matrix
-                ndat(cid(1),:) = nma(ss,:);            %Nucleus data
-                ndat(cid(2:end),:) = nan;    %Invalidate covered "cell"
+                %Remove Rogue pixels (Sadly possible)
+                if numel(cid) > 1;  %No Rogues if only 1 past mask
+                    %   Get subregion to work in (Rogues must be close
+                    %       and it is costly to work on whole image)
+                    subr = round(bsxfun(@plus, S(sp(ss)).Centroid(end:-1:1), ...
+                        [-1;1]*S(sp(ss)).MajorAxisLength));
+                    %   Get subregion rogue mask (to fill with Rogues)
+                    rx = false(subr(2,:) - subr(1,:) + 1);
+                    %   Extract subregion from image
+                    esub = enuc(subr(1):subr(2), subr(3):subr(4));
+                    %Store any Rogues in the subregion mask
+                    for sd = 2:numel(cid); rx = rx | esub == cid(sd); end
+                    %Remove Rogues
+                    if any(rx(:)); esub(rx) = 0; %IF Rogues found, remove
+                        %Replace modified subregion into image
+                        enuc(subr(1):subr(2), subr(3):subr(4)) = esub;
+                    end
+                end                
+                %Update nucleus data, and invalidate covered "cell"
+                ndat(cid(1),:) = nma(ss,:); ndat(cid(2:end),:) = nan;    
             end
     end    
     
