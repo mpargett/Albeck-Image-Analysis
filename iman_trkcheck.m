@@ -80,11 +80,21 @@ if ~exist('d','var') || isempty(d)
             'pastinfo',pst, 'display', false);
     end
     d.GMD = pst.GMD; %Retain GMD for any short circuits
+    
+    %Correct for frameshifts in images, IF applicable
+    if  op.fixshift;  ip.xyshift.curwell = p.xy;  minfo = [d.imo.m];
+        %   Ensure frames are restricted to those processed
+        ip.xyshift.frame = ip.xyshift.frame(ismember(ip.xyshift.frame,p.t));
+        [minfo, d.ctrans] = iman_xyshift(minfo, ip.xyshift, 1, pst.dao);
+        mmt = num2cell(minfo);  [d.imo.m] = deal(mmt{:}); %Replace minfo
+    end
 end
 
 %   Re-run uTrack if tF field is not populated
 if ~isfield(d, 'tF') || isempty(d.tF)
     minfo = [d.imo.m];
+    
+    
     %Prepare for uTrack - movieInfo fields must include a 2nd column,
     %   for Std Deviation of positions and amplitude
     mif = intersect({'xCoord','yCoord','zCoord','amp'},...
@@ -143,7 +153,8 @@ end
 %Get final track coordinates if IDs are to be printed
 [c, linfo] = iman_trackcoords(d.tF);
 ids = cellfun(@num2str, num2cell(1:size(c,1)), 'Un', 0);
-
+%Reverse any xy shift fixing performed
+if  op.fixshift;  c = iman_xyshift(c, d.ctrans, -1);  end
 
 %% Plot each frame of interest with search areas desired
 subp = p.plotlinks && p.plotgaps;

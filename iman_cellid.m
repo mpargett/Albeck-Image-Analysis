@@ -82,7 +82,7 @@ otim_fore = imerode(otim > otim_bkg.*(bkg_rat), st1);   %Foreground mask
 if nnz(~otim_fore) > 3;  bkvar = var(otim(~otim_fore));  
 else bkvar = 0; end
 
-%% Image filtering (used for )
+%% Image filtering
 %Get gradient magnitude image
 %   Filter out background by setting it to uniform level
 gim = otim;     gim(~otim_fore) = otim_bkg.*(bkg_rat);
@@ -222,7 +222,7 @@ for s = 1:length(thresholds)
         nma];                           %#ok<AGROW>         %Quality metrics
     
     %Check mqm against past, and store passing spots with better mqm
-    %   Can safely overwrite, new masks will always be larger
+    %   Can safely overwrite, new masks will always be larger (mostly)
     for ss = 1:numel(sp); 
             %Identify cells previously in the segmentation
             cid = unique(enuc(S(sp(ss)).PixelIdxList)); 
@@ -241,6 +241,8 @@ for s = 1:length(thresholds)
                     %       and it is costly to work on whole image)
                     subr = round(bsxfun(@plus, S(sp(ss)).Centroid(end:-1:1), ...
                         [-1;1]*S(sp(ss)).MajorAxisLength));
+                    %Limit subregion if near edge
+                    subr = bsxfun(@min, max(subr,1), size(otim));
                     %   Get subregion rogue mask (to fill with Rogues)
                     rx = false(subr(2,:) - subr(1,:) + 1);
                     %   Extract subregion from image
@@ -254,7 +256,7 @@ for s = 1:length(thresholds)
                     end
                 end                
                 %Update nucleus data, and invalidate covered "cell"
-                ndat(cid(1),:) = nma(ss,:); ndat(cid(2:end),:) = nan;    
+                ndat(cid(1),:) = nma(ss,:);    ndat(cid(2:end),:) = nan;    
             end
     end    
     
