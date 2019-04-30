@@ -327,7 +327,7 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
         	%Pre-allocate loop variables as needed
             movieInfo = cell(1,op.nW);  bkis = cell(op.nW,1);
             valcube = cell(1,op.nW);    masks = cell(1,op.nW);  
-            dbk = masks;  sbk = dbk;  %Backups for display/debug
+            dbk = masks;  sbk = dbk; %Backups for display/debug
         parfor ps = 1:op.nW   %Parallel Loop 
             %Load Data Access on each Worker (may need to reinitialize)
             if isTS;    daop = dao;          
@@ -335,6 +335,7 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
             end 
 
             %Pre-allocate and run serial sub-loop
+            try st = NaN; %Initialize internal TRY to get Time info on Error
             im = zeros(GMD.cam.PixNumY, GMD.cam.PixNumX, nc); %#ok<PFBNS>
             for s = 1:nper(ps)
                 %Get current time index (as start + already completed)
@@ -387,6 +388,13 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
             end
             %   IF not storing masks, empty the variable
             if ~op.msk.storemasks;  masks{ps} = {}; end
+            
+            catch pME   %Catch Error inside parallel loop
+                %Create ME with Time Point information
+                tME = MException('CellTracer:TimeInfo', 'at frame %d', st);
+                %Add Time Point ME, and throw exception
+                pME = addCause(pME, tME);  throw(pME);
+            end
         end     %END PARALLEL LOOP
         
         if p.bkg(h).dyn    %IF using dynamic background, store values
@@ -496,10 +504,17 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
         
     catch ME  %OPERATIONS TO PERFORM IN CASE OF ERROR
         errid = errid + 1;  %Set the new error ID number
+        %Get Time info from exception
+        TI = regexp({ME.cause{:}.message}, 'at frame (?<tp>\d+)', 'names');
+        cmi = ~cellfun(@isempty, TI); %Index of Time Info cause
+        %   Assign Time Info for reporting
+        if nnz(cmi) == 1; TI = TI{cmi}.tp;  tmsg = ME.cause{cmi}.message;
+        else TI = '??'; tmsg = 'at unknown frame';  end
+        
         %Display an error message
         dmsg = sprintf(repmat('\b', 1, numel(msg)+numel(emsg)+2)); 
-        msg = sprintf(['Processing FAILED on XY ', ...
-            '%d (%d/%d).'], op.xypos(h), h, nxy);  
+        msg = sprintf(['Processing FAILED on XY %d (%d/%d), ',...
+            tmsg, '.'], op.xypos(h), h, nxy);  
         disp(dmsg);  disp(msg);
         disp(ME.message);  emsg = []; msg = [];
         
@@ -510,7 +525,7 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
                 ME.stack(se).file, ME.stack(se).line) };  
         end        
         %Update running error file
-        erfname = erf_update(errid, erfname, MElog, p, op, h);
+        erfname = erf_update(errid, erfname, MElog, p, op, h, TI);
         
         continue
     end
@@ -534,7 +549,7 @@ end
 %% SUBFUNCTIONS
 
 % --- Update error log file ---
-function erfname = erf_update(errid, erfname, MElog, p, op, h)
+function erfname = erf_update(errid, erfname, MElog, p, op, h, TI)
     %Open or Create the Error File
     if errid == 1 || ~exist(erfname,'file') %IF this is the first error
         ct = now;    %Get current time
@@ -551,7 +566,7 @@ function erfname = erf_update(errid, erfname, MElog, p, op, h)
 
     %Write to file all error information in series
     fprintf(erfid, '\nError %d\n', errid);         %New title line
-    fprintf(erfid, 'In XY Position %d\n', ...
+    fprintf(erfid, ['In XY Position %d, at Frame ', TI, '\n'], ...
         op.xypos(h));          %XY Pos
     for sse = 1 : length(MElog)   %Print error messages
         fprintf(erfid, '%s\n', MElog{sse});

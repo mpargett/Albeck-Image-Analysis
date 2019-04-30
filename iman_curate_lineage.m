@@ -24,6 +24,7 @@
 %   cid     - The Curator's ID, your name or initials.  If this parameter
 %               is unset, a dialog box will open for you to provide it.
 %               The ID is printed in a note, saved in the processed data.
+%   xy      - A (numeric) list of XY indices to curate. (e.g. 1:20)
 %   imth    - The threshold percentile of the image to clip when
 %               displaying. Images will be scaled from 0 to the imth
 %               percentile of their intensity.  Default is 99.
@@ -89,6 +90,7 @@ function iman_curate_lineage_OpeningFcn(hObject, eventdata, h, varargin)
 % varargin   command line arguments to iman_curate_lineage (see VARARGIN)
 
 %Default parameters
+h.p.xys = [];
 h.p.imth = 99;          %Image percentile threshold, for display
 h.p.cid = 'Anonymous';  %Curator ID (Name)
 h.p.recurate = false;   %Flag to re-curate if files already done
@@ -136,17 +138,24 @@ h.xy.dao = iman_imageaccess(gf.p.fname);
 %   Set Channel and Z indices
 h.xy.chan = gf.op.seg.chan;     h.xy.z = gf.p.indsz.z;
 
-%Parse XY list to curate
-if nin > 1 && isnumeric(varargin{2});    xys = unique(varargin{2});
-    [badxy, wi] = setdiff(xys, fp.xy);
-    if ~isempty(badxy); xys = xys(~wi); %Remove xys not in the data
+%Parse XY list to curate (Probably an issue - use of varargin here)
+% if nin > 1 && isnumeric(varargin{2});    xys = unique(varargin{2});
+if ~isempty(h.p.xys) 
+    if isnumeric(h.p.xys); xys = unique(h.p.xys); %Check provide XYs
+    else error('List of XY indices must be numeric.'); end
+    [badxy, wi] = setdiff(xys, fp.xy); %Validate provided XYs
+    if ~isempty(badxy); xys = xys(~wi); %Remove XYs not in the data
         warning('IMAN:Curate:BadXY',['XYs ', num2str(badxy), ...
             ' are not present in the datafile(s) with base name ', ...
             [fp.dir,fp.name], '. They have been removed from the ', ...
             'curation set.']);
     end
-else xys = find(strcmpi(regexp(fp.apdx,'\d*$','match'), fp.xystr));
-    xys = fp.xy(xys:end); %Take xys from starting file to end
+else
+    if strcmpi(fp.apdx, 'global'); xys = fp.xy; %All XYs if Global file
+    else %IF xy file, start from there
+        xys = find(strcmpi(regexp(fp.apdx,'\d*$','match'), fp.xystr));
+        xys = fp.xy(xys:end); %Take xys from starting file to end
+    end
 end
 %Output the xy list to curate, and current position in the list
 h.xy.list = xys;  h.xy.n = numel(xys);    h.xy.i = 1;
@@ -282,7 +291,7 @@ if h.ev.i < h.ev.n
 end
 
 %Process rejection flags, modify data, and save
-process_curation(h);
+%process_curation(h);
 
 %IF another XY is to be curated
 if h.xy.i < h.xy.n;      
@@ -307,6 +316,8 @@ else %IF not, display end of curation message
     %Show message
     set(h.progress_text, 'String', str);
 end
+%Set modified data and update display
+guidata(hObject,h);     update_image(h);
 
 
 function [fp] = parse_target_file(fp)
@@ -336,7 +347,7 @@ while hxy.i <= hxy.n && isempty(hpd)
     %Point to the current XY in the list
     fld = [hfp.dir,hfp.name,'xy',hfp.xyfun(hxy.list(hxy.i)),'.mat'];
     %Check if current XY has been curated already, unless re-curating
-    if ~hrc && isfield(matfile(fld), 'Curation')
+    if ~hrc && ~isempty(who(matfile(fld), 'Curation'))
         hxy.i = hxy.i + 1;  %Iterate to next XY
     else
         hpd = load(fld);    %Load data file
@@ -380,7 +391,9 @@ if h.ev.i <= h.ev.n  %IF not finished with Merge/Splits for this XY
     %Assemble and show frame
     update_event_frames(h);
     %Update display text
-    str = ['Event ', num2str(h.ev.i),' of ',num2str(h.ev.n)];
+    str = ['Event ', num2str(h.ev.i),' of ',num2str(h.ev.n), ...
+        ', in XY ', num2str(h.xy.list(h.xy.i)), ...
+        ' (' , num2str(h.xy.i),'/',num2str(h.xy.n), ')'];
     set(h.progress_text, 'String', str);  %Show display text
 else    %IF finished, show a blank frame, and prompt to load next 
     imshow(zeros(101,525),'Parent',h.axes1);  %Show empty frame
@@ -402,26 +415,46 @@ end
 
 function [] = update_event_frames(h)
 %% Assemble display frame for current Event
+cla(h.axes1);   %First, clear the axes of previous elements
 %Get scale of data
 [ntrk, ntime, ~] = size(h.pd.valcube);
-%Number of previous frames and frames after the Event
-pfrm = 3; afrm = 1;
+%Display parameters (fills a 535x111 pixel region)
+%   Number of previous frames and frames after the Event
+pfrm = 3; afrm = 1; nf = pfrm + afrm + 1;
+flr = 50; fsz = flr*2+1; spc = 5; fjmp = fsz+spc;
 %Event indices (assert dependent track index from linfo index)
 ei = h.ev.list(h.ev.i,:);   ei(1) = rem(ei(1)-1, ntrk) + 1;
 
-%Initialize frame to be shown
-frm = zeros(101,525);
+%Initialize frames to be shown
+frm = zeros(fsz + 2*spc, nf*fsz + (nf+1)*spc);
 %Get centroid coordinates
 cc = reshape(h.ev.coords{h.ev.i}(:,ei(3),:), 2,2);
 %Get average center coordinates
 acc = round(nanmean(cc,1))';
+%Get valid relative time range to use
+t1 = max(-afrm, ei(3)-ntime); t2 = min(pfrm, ei(3)-1);
+
+%Check that event tracks are in frame
+rpos = bsxfun(@minus, ...
+    h.ev.coords{h.ev.i}(:,ei(3)-(t1:t2),:), shiftdim(acc,-2));
+%   Get frame size (boundaries)
+xyb = [h.xy.dao.read.getSizeX, h.xy.dao.read.getSizeY];  rsz = false; 
+%IF any tracks are not in frame, set image scaling to be used
+if ~all(abs(rpos(:)) < flr | isnan(rpos(:)));    rsz = true;
+    rscl = 0.8*flr/nanmax(abs(rpos(:)));                 %Determine scaling
+    acc = round(acc*rscl);  xyb = round(xyb*rscl);  %Adjust center, bounds
+    %Annotate display with scaling factor
+    text(h.axes1, spc, fjmp+11, ['Image scaled by ',num2str(round(rscl,2)),'x'], ...
+        'FontSize',11, 'HorizontalAlignment','Left');    
+end
+
 %Get frame range around center coordinates
-xy = num2cell(bsxfun(@plus,acc, -50:50),2);
+xy = num2cell(bsxfun(@plus,acc, -flr:flr),2);
 %Adjust for frame edge clipping
 %   Get clipping bounds
 cb = cell(2,1);
-cb{1} = xy{1} > 0 & xy{1} <= h.xy.dao.read.getSizeX;
-cb{2} = xy{2} > 0 & xy{2} <= h.xy.dao.read.getSizeY;
+cb{1} = xy{1} > 0 & xy{1} <= xyb(1);
+cb{2} = xy{2} > 0 & xy{2} <= xyb(2);
 cb = cellfun(@(x)find(x,1,'first') + [0, nnz(x)-1], cb, 'Un', 0);
 %   Clip the image frame range (xy)
 xy = cellfun(@(x,c)x(c(1):c(2)), xy, cb, 'Un', 0);
@@ -429,23 +462,29 @@ xy = cellfun(@(x,c)x(c(1):c(2)), xy, cb, 'Un', 0);
 tfrx = cb{1}(1):cb{1}(2);   tfry = cb{2}(1):cb{2}(2);
 
 %Assemble frame, one time point at a time
-t1 = max(-afrm, ei(3)-ntime); t2 = min(pfrm, ei(3)-1);
 ctc = cell(t2-t1,1);
 for s = t1:t2 
     %Get full frame for this time
     im = iman_getframe(h.xy.dao, ...
         [ei(3)-s, h.xy.chan, h.fp.xy(h.xy.i), h.xy.z]);
+    %IF necessary, resize frame to keep tracks in view
+    if rsz; im = imresize(im, xyb(2:-1:1)); end
     %Place cropped region in frame to be shown
-    frm(tfry, (pfrm-s)*106 + tfrx) = im(xy{2}, xy{1});
+    frm(spc + tfry, spc + (pfrm-s)*fjmp + tfrx) = im(xy{2}, xy{1});
+    %Get raw centroid coordinates
+    crds = reshape(h.ev.coords{h.ev.i}(:,ei(3)-s,:), 2,2)';
+    if rsz; crds = round(crds*rscl); end %Resize if needed
     %Get centroids for the frames to be shown (cropped and tiled)
-    ctc{s-t1+1} = ([106*(pfrm-s); 0] - [xy{1}(1);xy{2}(1)] + ...
-                   [cb{1}(1);cb{2}(1)] - 1)*ones(1,2) ...
-        + reshape(h.ev.coords{h.ev.i}(:,ei(3)-s,:), 2,2)';
+    ctc{s-t1+1} = ([fjmp*(pfrm-s)+spc; spc] - [xy{1}(1);xy{2}(1)] + ...
+                   [cb{1}(1);cb{2}(1)] - 1)*ones(1,2) + crds;    
+    %Annotate with Time Indices
+    text(h.axes1, (t2-s)*(fjmp) + flr, -0.125*flr, ['Frame ',num2str(ei(3)-s)], ...
+        'FontSize',12, 'HorizontalAlignment','Center');    
 end
 
 %Show image
-mxi = prctile(frm(frm>0), h.p.imth);
-imshow(frm, [0, mxi], 'Parent', h.axes1);  hold(h.axes1,'on');
+mxi = prctile(frm(frm>0), h.p.imth); %Determine intensity scaling
+imshow(frm, [0, mxi], 'Parent', h.axes1);  hold(h.axes1,'on'); %Show
 %Overplot centroids in different colors
 sty = {1, 'ko', 4; 1, 'bo', 3; 2, 'ko', 4; 2, 'yo', 3}; %Color styles
 for s = 1:numel(ctc)    %PER frame
