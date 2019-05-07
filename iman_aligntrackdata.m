@@ -3,11 +3,15 @@
 %   masked data to tracks.  Used after both segmentation and tracking in
 %   the Celltracer procedure.
 %
-%   [vc_out, vi, viv] = iman_aligntrackdata(coord, valcube)
+%   [vc_out, vi, viv] = iman_aligntrackdata(coord, valcube, vcorder)
 %       selects the nearest centroid from valcube for each tracked
 %       coordinate in coord.  Overlaps (centroids linked to two tracks) and
 %       out-of-range centroids (greater than estimated cell radius) are
-%       rejected.
+%       rejected. The 3rd input, vcorder, is mandatory, and must either be
+%       the "vcorder" cell array defining names for the 3rd dimension
+%       "slice" of valcube, or a vector of the indices for the "slices"
+%       containting X coordinates, Y coordinates and Nuclear Area (if
+%       available), in that order.
 %
 %   Outputs:
 %   vc_out  - valcube array (see celltracer)
@@ -26,12 +30,16 @@ if strcmpi(coord,'version'); vc_out = 'v2.0'; return; end
 [ncells, ntime, ~] = size(coord);  nfield = size(valcube{1}, 3);
 
 %Get position of Coordinates in Valcube
+nari = [];
 if iscell(vcorder) && ischar(vcorder{1})
     %Get X and Y channel indices
     xyi = [ find(strcmpi(vcorder, 'XCoord')),... %X index
             find(strcmpi(vcorder, 'YCoord')) ];  %Y index 
-elseif isnumeric(vcorder) && numel(vcorder == 2)
+    nari = find(strcmpi(vcorder, 'nArea'));
+elseif isnumeric(vcorder)
     xyi = squeeze(vcorder); %Use 'vcorder' as raw indices
+    %Take nuc. area index from raw indices as 3rd (neglect any others)
+    if numel(xyi) > 2; nari = xyi(3); xyi = xyi(1:2); end
 end
 
 %Align tracked coordinates to nearest centroid for each time point
@@ -45,12 +53,17 @@ for st = 1:size(coord,2)    %FOR each time point
     vcc(:,:) =  valcube{st}(:,1,xyi);
     %Short circuit for empty fields
     if all(any(isnan(vcc),2));  continue; 	end
-    %Get estimate radius of cell (from segmentation)
-    erad = sqrt(valcube{st}(:,1,end)./pi); 
     
     %Get pairwise distance between tracked coordinate and centroids
     vdist = sqrt( bsxfun(@minus, coord(:,st,1), vcc(:,1)').^2 + ...
                   bsxfun(@minus, coord(:,st,2), vcc(:,2)').^2   );
+    
+    %Get estimate for radius of cell (from segmentation as feasible)
+    if ~isempty(nari);  erad = sqrt(valcube{st}(:,1,nari)./pi);
+    else erad = nanmin(squareform(pdist(squeeze(coord(:,st,:)), 'euclidean'))...
+            + diag(inf(ncells,1))); %Use nearest neighbor, if necessary
+    end        
+              
     %   Exclude distances outside the radius of the nucleus
     vdist(bsxfun(@gt,vdist, erad')) = NaN;
     

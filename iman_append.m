@@ -1,31 +1,49 @@
 %IMAN_APPEND
 %   Prepare secondary imaging data as an appendix to celltracer data.
-%   Aligns the end frame of the first image data to the first frame of the
-%   latter data.  
+%   Aligns cell traces from the end frame of the first image data to those
+%   in the first frame of the second dataset.  
 %
-%   vc_app = iman_append(in1, in2)
+%   vc_app = iman_append(IN1, IN2, ...)
 %
-%   in1 and in2 must both be processed imaging data, as one of:
-%       valcube array [num]
-%       filename of mat-file containing 'valcube' [char]
-%       cell array of either of the above [cell]
+%   The input datasets, IN1 and IN2, must both be processed imaging data, 
+%       as either a valcube array [numeric], or a filename of a mat-file
+%       containing 'valcube' [char].
 %
-%   vc_app, the output, is a cell array containing the aligned data (from
-%       the 2nd input) such that each row is matched with the corresponding
-%       row in the 1st input data set.  Rows that do not match are
-%       discarded.  Cell array elements are ordered matching the input cell
-%       arrays.
+%   The output, vc_app, is a numeric 'valcube' array containing the aligned
+%       data from IN2, such that each row is matched with the corresponding
+%       row in IN1.  Rows from IN2 that do not match anything in IN1 are
+%       discarded.   
 %
-%   Version 1.0
+%   Additional parameters may be passed as Name/Value pairs:
+%   xyind - Cell array of indices of the X and Y coordinates in the input
+%               valcube data (the "slices" of the 3rd dimension), with a
+%               separate cell array element for input 1 and 2, such as
+%               {[Xind1,Yind1], [Xind2,Yind2]}.  Typically not needed if
+%               providing file names of processed data to load.     
+%   trim  - Cell array of coordinates defining rectangular regions of the
+%               frames to trim prior to alignment. For each input frame,
+%               the region is provided by defining the upper left and lower
+%               right corner, e.g. {[Xul,Yul; Xlr,Ylr]}. Optional, but
+%               likely to improve alignment if large deviations exist in
+%               frame centering (or size).
+%
+%   Example usage:
+%   
+%   vc_app = iman_append('path\filename1.mat', 'path\filename2.mat', ...
+%       'xyind', {[5,6],[2,3]}, 'trim', {[100,400; 700,800],[300,200; 900,600]});
+%
+%   Version 2.0
 
 %   M. Pargett, Albeck Lab, UC Davis, MCB.  2016
+%   Version 2.0 update to enforce provision of vcorder to
+%       iman_aligntrackdata, and removes input as cell arrays
 
 function vc_app = iman_append(in1, in2, varargin)
 %Version check provision
-if strcmpi(in1,'version'); vc_app = 'v1.0'; return; end
+if strcmpi(in1,'version'); vc_app = 'v2.0'; return; end
 
-p.xyind = [];     %Default XY indices are empty (found as end-2:end-1)
-p.trim  = {};     %Default is to not trim (empty)
+p.xyind = cell(1,2);  %Default XY indices are empty (found as end-2:end-1)
+p.trim  = {};         %Default is to not trim (empty)
 
 %Input option pair parsing:
 nin = length(varargin);     %Check for even number of add'l inputs
@@ -35,32 +53,49 @@ if rem(nin,2) ~= 0; warning(['Additional inputs must be provided as ',...
 for s = 1:2:nin;   p.(lower(varargin{s})) = varargin{s+1};   end
 
 %% Get processed data
-%   Check input when receiving cell arrays
-if iscell(in1) || iscell(in2); assert(iscell(in1) && iscell(in2) ...
-        && numel(in1) == numel(in2), 'IMAN:AppendCheck', ...
-        ['When submitting multiple data sets for appending, they must ',...
-        'be in cell arrays and the number of data sets in inputs 1 ',...
-        'and 2 must match.']);
-end
-
 %Parse inputs
-vc1 = sub_parse_data(in1);  vc2 = sub_parse_data(in2);
+[vc1, xycs{1}] = sub_parse_data(in1, p.xyind{1}); 
+[vc2, xycs{2}] = sub_parse_data(in2, p.xyind{2});
 
 %Run registration and alignment
-vc_app = cellfun(@(x,y)sub_align(x, y, p.xyind, p.trim), ...
-    vc1, vc2, 'UniformOutput', false);
+vc_app = sub_align(vc1, vc2, xycs, p.trim);
 
 end
 
+
 % --- Sub-Function: Parse Input Data --- 
-function d = sub_parse_data(d)
-%Extract valcube data from files, as needed
-if ischar(d);        a = load(d);   d = {a.valcube};
-elseif iscell(d)    
-    if ischar(d{1}) %IF multiple names, load all, place in cell array
-        a = cellfun(@(x)load(x,'valcube'), d);  d = {a.valcube};
+function [d, xyi] = sub_parse_data(d, pxy)
+if ischar(d) %IF multiple names, load all
+    a = load(d,'valcube','vcorder'); %Load
+    d = a.valcube;    %Pack up data arrays
+    %Get X and Y channel indices
+    if isfield(a, 'vcorder')
+        xyi = [ find(strcmpi(a.vcorder, 'XCoord')),... %X index
+                find(strcmpi(a.vcorder, 'YCoord')) ];  %Y index
+        xyi = [xyi, find(strcmpi(a.vcorder, 'nArea'))];
+    else xyi = []; %IF no vcorder, no xyi
     end
-elseif isnumeric(d); d = {d};  %Ensure arrays are in a cell
+elseif isnumeric(d);  xyi = []; %IF no file, no xyi
+else
+    error('IMAN:Append:BadInput', ['Input data must be either a ',...
+        'valcube array (numeric) or a string consisting of a ',...
+        'processed data file name.'])
+end
+
+%Check XY indices
+if isempty(xyi)
+    if isempty(pxy);  error('IMAN:Append:NoXYind', ...
+            ['If data are provided without xy indices (e.g. as numeric ',...
+            'arrays rather than processed data file names), X and Y ',...
+            'indices must be provided via the parameter xyind.']);
+    else xyi = pxy; %Fill from parameters if necessary
+    end
+elseif ~isempty(pxy) %IF both parameters and files give indices, check
+    if ~all( xyi(:) == pxy(:) )
+    error('IMAN:Append:BadXYind', ['X and Y coordinate indices provided',...
+        ' in the parameter xyind do not match those indicated by the ',...
+        'vcorder variable found in the processed data file(s).']); 
+    end
 end
 
 end
@@ -72,11 +107,9 @@ function vc_app = sub_align(vc1, vc2, xycs, t)
 %   Bring coordinates to the same orientation (that of the former set)
 
 %Determine data sizes
-nv1 = size(vc1,3);
-nv2 = size(vc2,3);    nt2 = size(vc2,2);
-if isempty(xycs); xyc1 = nv1-2:nv1-1; xyc2 = nv2-2:nv2-1;
-else  xyc1 = xycs{1}; xyc2 = xycs{2};
-end
+nt2 = size(vc2,2);
+%   Get XY coordinate indices
+xyc1 = xycs{1}(1:2); xyc2 = xycs{2}(1:2);
 
 %Get coordinate sets for Scene (scn) and Model (mdl)
 scn = squeeze(vc1(:, end, xyc1));    mdl = squeeze(vc2(:, 1  , xyc2));
@@ -93,24 +126,27 @@ end
 [mdl, tp, ctf] = iman_kcreg( scn, mdl );
 
 %Re-place coordinates with those transformed
+nc2 = size(vc2,1);  %Number of cells in original Model (Input 2)
 if isempty(t);   vc2(:, 1, xyc2) = mdl;
-else   nc2 = size(vc2,1);  
-    vc2(:, 1, xyc2) = ctf([squeeze(vc2(:, 1, xyc2)), ones(nc2,1)], tp);
+else vc2(:, 1, xyc2) = ctf([squeeze(vc2(:, 1, xyc2)), ones(nc2,1)], tp);
 end
 %Replace time dimension in scene coordinates
 scn = shiftdim( shiftdim( shiftdim(scn,1), -1), 2);
 
 
 %% Align coordinates across gaps
-[vc_app, vi, viv] = iman_aligntrackdata(scn, {vc2(:,1,:)});
+[vc_app, vi, viv] = iman_aligntrackdata(scn, {vc2(:,1,:)}, xycs{2});
+%   Replace Model coordinates into output (trackdata retains scence coords)
+vc_app(viv, 1, xyc2) = vc2(vi(viv), 1, xyc2);
 
 if nt2 > 1  %IF latter data have more than one time point
+    vc_app(:,2:nt2,:) = NaN; %Initialize as NaN
     %Transform all latter coordinate sets
     for s = 2:nt2
         vc2(:,s,xyc2) = ctf([squeeze(vc2(:, s, xyc2)), ones(nc2,1)], tp); 
     end 
     %Align all latter data (neglects new traces in latter data)
-    vc_app(:, 2:nt2, :) = vc2(vi(viv), 2:nt2, :);
+    vc_app(viv, 2:nt2, :) = vc2(vi(viv), 2:nt2, :);
 end
 end
 

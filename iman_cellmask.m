@@ -125,10 +125,10 @@ if isempty(m)
         valcube = cat(1, valcube, ca{:});
     end
     %Standard appendices -      coordinates    nuc area
-    valcube(end + (1:2)) = {'XCoord', 'YCoord'};
+    valcube(end + (1:3)) = {'XCoord', 'YCoord', 'nArea'};
     %Shape metric appendices
     if op.msk.appendshape
-    valcube(end + (1:6)) = {'nArea', 'nEccentricity',...
+    valcube(end + (1:5)) = {'nEccentricity',...
         'nOrientation', 'nExtent', 'nSolidity', 'nCV'};
     end
     valcube{end + 1} = ['Note: All values are background subtracted.  ',...
@@ -291,10 +291,10 @@ for sa = 1:nagg
 end
 
 %Store coordinate values and nuclear metrics, appended
-valcube(:,:, vcs + (1:2)) = cat(3, m.xCoord, m.yCoord);
+valcube(:,:, vcs + (1:3)) = cat(3, m.xCoord, m.yCoord, m.are);
 %Append shape metrics if called
 if op.msk.appendshape
-    valcube(:,:, vcs + (3:8)) = cat(3, m.are, m.nEcc, m.nOrient, ...
+    valcube(:,:, vcs + (4:8)) = cat(3, m.nEcc, m.nOrient, ...
         m.nExt, m.nSold, m.nCV);
 end
 
