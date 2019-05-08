@@ -100,7 +100,7 @@ op.seg.minD = op.seg.minD./pxscl;  op.seg.maxD = op.seg.maxD./pxscl;
 %Display
 if p.display
 for s = p.c(:)'
-    imm = iman_maskoverlay(im(:,:,s)-bkg(s),mask.nuc,p.nclr,3, p.imthresh);
+    imm = iman_maskoverlay(im(:,:,s),mask.nuc,p.nclr,3, p.imthresh);
     imm = iman_maskoverlay(imm,mask.cyt,p.cclr,2, p.imthresh); 
     figure; imshow(imm); 
     title(['XY:', num2str(p.xy),' C:', num2str(s), ' T:', num2str(p.t)]);
