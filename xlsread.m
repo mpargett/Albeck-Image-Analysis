@@ -126,6 +126,8 @@ if isnew %IF Version 2019a or later
         otherwise;  yraw = readcell(fp, pn{1+isr(1)}, varargin{1}, ...
                                         pn{1+isr(2)}, varargin{2});
     end
+    %Replace "missing" data with NaN
+    yraw(cellfun(@ismissing, yraw)) = {NaN};
     %Pre-define function to get ranges from logical matrix
     get_bnds = @(inp,dm)find(any(inp,dm), 1, 'first') : ...
                         find(any(inp,dm), 1, 'last');
