@@ -108,7 +108,7 @@ function [ynum, ytxt, yraw] = xlsread(fp, varargin)
 %Check MATLAB Version
 vv = ver('MATLAB');                                 %Get version
 rr = regexpi(vv.Release, 'R(\d*)\D?', 'tokens');    %Get release year
-isnew = num2str(rr{1}{1}) >= 2019;                  %Check if 2019 or later
+isnew = str2num(rr{1}{1}) >= 2019;                  %Check if 2019 or later
 
 %Choose procedure based on Version
 if isnew %IF Version 2019a or later
@@ -126,16 +126,22 @@ if isnew %IF Version 2019a or later
         otherwise;  yraw = readcell(fp, pn{1+isr(1)}, varargin{1}, ...
                                         pn{1+isr(2)}, varargin{2});
     end
-        
+    %Pre-define function to get ranges from logical matrix
+    get_bnds = @(inp,dm)find(any(inp,dm), 1, 'first') : ...
+                        find(any(inp,dm), 1, 'last');
+    
     %   Get numeric only array
-    ynum = nan(size(yraw));             %Initialize numeric outputs
-    chk = cellfun(@isnumeric, yraw);    %Check for numbers only
-    ynum(chk) = yraw{chk};              %Assign numeric output
+    chk = cellfun(@(x)isnumeric(x)&&~isnan(x), yraw);   %Check for numbers
+    b1 = get_bnds(chk,2); b2 = get_bnds(chk,1);	%Get numeric ranges  
+    ynum = nan(numel(b1),numel(b2));           	%Initialize numeric outputs
+    ynum(chk(b1,b2)) = [yraw{chk}];             %Assign numeric output
     
     %   Get text only cell array
-    ytxt = cell(size(yraw));            %Initialize text outputs
-    chk = cellfun(@ischar, yraw);       %Check for text
-    ytxt(chk) = yraw(chk);              %Assign text output
+    chk = cellfun(@ischar, yraw);               %Check for text
+    b1 = get_bnds(chk,2); b2 = get_bnds(chk,1);	%Get text ranges  
+    ytxt = cell(numel(b1),numel(b2));         	%Initialize text outputs
+    ytxt(chk(b1,b2)) = yraw(chk);               %Assign text output    
+    
     
 else %IF Version prior to 2019a
     %Pass everything to original XLSREAD
