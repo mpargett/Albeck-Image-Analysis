@@ -108,7 +108,7 @@ function [ynum, ytxt, yraw] = xlsread(fp, varargin)
 %Check MATLAB Version
 vv = ver('MATLAB');                                 %Get version
 rr = regexpi(vv.Release, 'R(\d*)\D?', 'tokens');    %Get release year
-isnew = str2num(rr{1}{1}) >= 2019;                  %Check if 2019 or later
+isnew = str2double(rr{1}{1}) >= 2019;               %Check if 2019 or later
 
 %Choose procedure based on Version
 if isnew %IF Version 2019a or later
@@ -127,7 +127,7 @@ if isnew %IF Version 2019a or later
                                         pn{1+isr(2)}, varargin{2});
     end
     %Replace "missing" data with NaN
-    yraw(cellfun(@ismissing, yraw)) = {NaN};
+    yraw(cellfun(@(x)all(ismissing(x)), yraw)) = {NaN};
     %Pre-define function to get ranges from logical matrix
     get_bnds = @(inp,dm)find(any(inp,dm), 1, 'first') : ...
                         find(any(inp,dm), 1, 'last');
@@ -141,8 +141,8 @@ if isnew %IF Version 2019a or later
     %   Get text only cell array
     chk = cellfun(@ischar, yraw);               %Check for text
     b1 = get_bnds(chk,2); b2 = get_bnds(chk,1);	%Get text ranges  
-    ytxt = cell(numel(b1),numel(b2));         	%Initialize text outputs
-    ytxt(chk(b1,b2)) = yraw(chk);               %Assign text output    
+    ytxt = cell(numel(b1),numel(b2));  [ytxt{:}] = deal('');        	%Initialize text outputs
+    ytxt(chk(b1,b2)) = yraw(chk);               %Assign text output 
     
     
 else %IF Version prior to 2019a
