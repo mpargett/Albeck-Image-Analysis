@@ -90,7 +90,7 @@ function iman_curate_lineage_OpeningFcn(hObject, eventdata, h, varargin)
 % varargin   command line arguments to iman_curate_lineage (see VARARGIN)
 
 %Default parameters
-h.p.xys = [];
+h.p.xy = [];
 h.p.imth = 99;          %Image percentile threshold, for display
 h.p.cid = 'Anonymous';  %Curator ID (Name)
 h.p.recurate = false;   %Flag to re-curate if files already done
@@ -138,10 +138,9 @@ h.xy.dao = iman_imageaccess(gf.p.fname);
 %   Set Channel and Z indices
 h.xy.chan = gf.op.seg.chan;     h.xy.z = gf.p.indsz.z;
 
-%Parse XY list to curate (Probably an issue - use of varargin here)
-% if nin > 1 && isnumeric(varargin{2});    xys = unique(varargin{2});
-if ~isempty(h.p.xys) 
-    if isnumeric(h.p.xys); xys = unique(h.p.xys); %Check provide XYs
+%Parse XY list to curate
+if ~isempty(h.p.xy) 
+    if isnumeric(h.p.xy); xys = unique(h.p.xy); %Check provide XYs
     else error('List of XY indices must be numeric.'); end
     [badxy, wi] = setdiff(xys, fp.xy); %Validate provided XYs
     if ~isempty(badxy); xys = xys(~wi); %Remove XYs not in the data
@@ -466,7 +465,7 @@ ctc = cell(t2-t1,1);
 for s = t1:t2 
     %Get full frame for this time
     im = iman_getframe(h.xy.dao, ...
-        [ei(3)-s, h.xy.chan, h.fp.xy(h.xy.i), h.xy.z]);
+        [ei(3)-s, h.xy.chan, h.xy.list(h.xy.i), h.xy.z]);
     %IF necessary, resize frame to keep tracks in view
     if rsz; im = imresize(im, xyb(2:-1:1)); end
     %Place cropped region in frame to be shown
