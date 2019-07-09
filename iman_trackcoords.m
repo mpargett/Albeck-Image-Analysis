@@ -78,10 +78,8 @@ si = sli(sti);  c = c(si,:,:);  whosmymommy = whosmymommy(si,:);
 %   Invert sorting order for lineage mapping
 [~,isi] = sort(si);
 %   Apply sorting to lineage values
-ts = unique(whosmymommy(~isnan(whosmymommy)));  %Get list of values
-for s = ts(:)' %(Ensure row vector, robust to Empty cases)
-    whosmymommy(whosmymommy == s) = isi(s);  
-end
+mommyfix = ~isnan(whosmymommy);      	%Get indices of mommys to correct
+whosmymommy(mommyfix) = isi(whosmymommy(mommyfix));	%Correct them
 
 
 %% Interpolate gaps in coordinate vectors
