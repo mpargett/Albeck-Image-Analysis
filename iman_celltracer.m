@@ -483,7 +483,7 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
         
             % - Display the adjustments for frame shift, as applicable -
             if op.disp.shifts && ~isempty(p.xyshift) && ~isempty(p.xyshift.frame)
-                subf_shift_display('shift', movieInfo, coord, p.xyshift, ...
+                subf_sampdisp('shift', movieInfo, coord, p.xyshift, ...
                     sbk, op, ctrans, dsz, runid);
             end
 
@@ -505,7 +505,10 @@ for h = [hi(~use_altXY), hi(use_altXY)] %First run XYs with own background
     catch ME  %OPERATIONS TO PERFORM IN CASE OF ERROR
         errid = errid + 1;  %Set the new error ID number
         %Get Time info from exception
-        TI = regexp({ME.cause{:}.message}, 'at frame (?<tp>\d+)', 'names');
+        if ~isempty(ME.cause)
+            TI = regexp({ME.cause{:}.message}, 'at frame (?<tp>\d+)', 'names');
+        else TI = {[]};
+        end
         cmi = ~cellfun(@isempty, TI); %Index of Time Info cause
         %   Assign Time Info for reporting
         if nnz(cmi) == 1; TI = TI{cmi}.tp;  tmsg = ME.cause{cmi}.message;
