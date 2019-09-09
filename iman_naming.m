@@ -5,6 +5,8 @@
 %       To get cell arrays with current naming conventions and regular
 %       expression maps.
 %   [isvalid] = iman_naming('validate',)
+%
+%   [isvalid] = iman_naming('match',)
 
 function [fpn, ftn] = iman_naming(varargin)
 %Version check provision after name definitions
@@ -20,7 +22,7 @@ fpn = { 'DAPI',         'dapi'; ...
         'mNeon',        'm?neon(gre?e?n)?';...
         'YPet',         'y\s?pet'; ...
         'EYFP',         'e?\s?yfp'; ...
-        'EGFP',         'e\s?gfp'; ...
+        'EGFP',         'e?\s?gfp'; ...
 %         'Emerald',      'emer(ald)?'; ...
 %         'Clover',       'clov(er)?'; ...
         'mVenus',       'm?ven(us)?'; ...
@@ -94,13 +96,23 @@ if nargin > 0
         
     elseif strcmpi(varargin{1},'match'); 
         %To match correct names, 2nd input must be FPhores, 3rd Filters
-        if nargin > 1; c = assertcell(varargin(2));     %Fluorophores
-            fpn = cellfun(@(x)fpn{~cellfun(@isempty,regexpi(x, fpn(:,2))),1}, ...
-                c, 'Un',0);
-        end
-        if nargin > 2; c = assertcell(varargin(3));     %Filters
-            ftn = cellfun(@(x)ftn{~cellfun(@isempty,regexpi(x, ftn(:,2))),1}, ...
-                c, 'Un',0);
+        for sin = 1:nargin-1
+            %   Get list to check against
+            switch sin; case 1; fin = fpn; case 2; fin = ftn; end
+            %   Get inputs to check
+            c = assertcell(varargin(sin+1)); 
+            %   Check all and get indices of matches
+            fidx = cellfun(@(x)find(~cellfun(@isempty,regexpi(x, fin(:,2)))), c, 'un',0);
+            %   Identify any failed matches
+            fm = cellfun(@isempty,fidx);
+            %   Warn about failed matches
+            if any(fm);   warning('IMAN:Naming', ...
+                    ['No matching name found for: ', csl(c(fm)), '.']);
+            end
+            %   Assign good matches
+            c(~fm) = fin([fidx{:}]);
+            %   Set output
+            switch sin; case 1; fpn = c; case 2; ftn = c; end
         end
     end
 end
@@ -120,4 +132,8 @@ function c = assertcell(c)
         'cell arrays of strings.']);
 end
 
-
+function lst = csl(in) %Insert commas for a list from a cell
+nin = numel(in);    %Get size of input
+lst = cat(1, reshape(in,1,nin), [repmat(', ', 1, nin-1), {''}]); %Insert
+lst = [lst{:}];     %Arrange into list
+end
