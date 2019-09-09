@@ -120,15 +120,15 @@ if isnew %IF Version 2019a or later
     pn = {'SHEET', 'RANGE'}; %Prepare parameter names
     
     %Use readcell, with SHEET, RANGE parameters matched up
-    alreadyopen = fopen('all');
+    alreadyopen = fopen('all');  %Store currently open FIDs
     switch nin
         case 0;     yraw = readcell(fp);
         case 1;     yraw = readcell(fp, pn{1+isr}, varargin{1});
         otherwise;  yraw = readcell(fp, pn{1+isr(1)}, varargin{1}, ...
                                         pn{1+isr(2)}, varargin{2});
     end
-    stupidmonkey = setdiff(fopen('all'), alreadyopen);
-    fclose(stupidmonkey);
+    stupidmonkey = setdiff(fopen('all'), alreadyopen); %Get new FIDs
+    if ~isempty(stupidmonkey);   fclose(stupidmonkey);    end
     %Replace "missing" data with NaN
     yraw(cellfun(@(x)all(ismissing(x)), yraw)) = {NaN};
     %Pre-define function to get ranges from logical matrix
